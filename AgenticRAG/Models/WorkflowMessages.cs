@@ -22,7 +22,7 @@ public record StepSignal(int StepIndex);
 /// </summary>
 public record SearchRequest(
     string RewrittenQuery,
-    string Tool,                 // "search_10k" | "search_web"
+    string Tool,                 // "search_docs" (internal KB) | "search_web" (Tavily)
     string OriginalSubQuestion,
     int StepIndex);
 

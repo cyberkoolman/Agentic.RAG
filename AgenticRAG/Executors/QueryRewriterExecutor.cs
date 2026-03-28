@@ -13,7 +13,7 @@ namespace AgenticRAG.Executors;
 /// most effective search query for the assigned tool.
 ///
 /// Outgoing message: SearchRequest → routed by conditional edges to
-///   VectorSearchExecutor (tool == "search_10k") or
+///   VectorSearchExecutor (tool == "search_docs") or
 ///   WebSearchExecutor    (tool == "search_web")
 /// </summary>
 [SendsMessage(typeof(SearchRequest))]
@@ -61,8 +61,8 @@ public sealed class QueryRewriterExecutor : Executor<StepSignal>
 
             Rewrite the given sub-question into the single most effective search query for
             the specified tool:
-              • search_10k  → use precise financial/business terminology, section names
-                              (e.g. "Item 1A Risk Factors"), product names, or exact numbers.
+              • search_docs → use precise terminology matching the document's content style
+                              (e.g. exact section names, product names, numbers, or domain jargon).
               • search_web  → use specific, current terms that will surface recent news,
                               analyst reports, or press releases.
 

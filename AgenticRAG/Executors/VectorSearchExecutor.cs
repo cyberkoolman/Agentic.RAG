@@ -7,7 +7,7 @@ namespace AgenticRAG.Executors;
 /// <summary>
 /// Node 3a — Vector / Keyword / Hybrid Search (internal knowledge base)
 ///
-/// Handles SearchRequests routed here when tool == "search_10k".
+/// Handles SearchRequests routed here when tool == "search_docs".
 /// Internally contains a Retrieval Supervisor that uses the fast LLM to select the
 /// best search strategy (vector, keyword, or hybrid) for the current query.
 ///
@@ -35,7 +35,7 @@ public sealed class VectorSearchExecutor : Executor<SearchRequest>
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
-        Console.WriteLine($"\n[VectorSearch] Searching 10-K index...");
+        Console.WriteLine($"\n[VectorSearch] Searching knowledge base index...");
         Console.WriteLine($"  Query : {message.RewrittenQuery}");
 
         // ── Retrieval Supervisor: choose the best strategy ──────────────────

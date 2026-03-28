@@ -43,11 +43,29 @@ var tavilyService  = new TavilyService(settings);
 var documentLoader = new DocumentLoader(settings);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Build the knowledge base (download → parse → embed → index)
+// Build the knowledge base (download/read → parse → embed → index)
 // ─────────────────────────────────────────────────────────────────────────────
 
-Console.WriteLine("\n[Init] Building knowledge base from NVIDIA 2024 10-K...");
-var documents = await documentLoader.LoadNvidiaFilingAsync(aiService);
+var sources = settings.Knowledge.Sources;
+if (sources.Count == 0)
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("[Config] No Knowledge:Sources configured — the knowledge base will be empty.");
+    Console.ResetColor();
+}
+
+// Human-readable description injected into the Planner's system prompt
+// so it knows what documents are available for search_docs queries.
+var kbDescription = sources.Count > 0
+    ? string.Join(", ", sources.Select(s =>
+        string.IsNullOrWhiteSpace(s.Description) ? s.Name : $"{s.Name} ({s.Description})"))
+    : "(no internal documents configured)";
+
+Console.WriteLine("\n[Init] Building knowledge base...");
+foreach (var s in sources)
+    Console.WriteLine($"  • {s.Name}");
+
+var documents = await documentLoader.LoadAllAsync(sources, aiService);
 vectorStore.AddDocuments(documents);
 Console.WriteLine($"[Init] Knowledge base ready — {vectorStore.DocumentCount} chunks indexed.");
 
@@ -55,21 +73,34 @@ Console.WriteLine($"[Init] Knowledge base ready — {vectorStore.DocumentCount} 
 // Build the workflow graph
 // ─────────────────────────────────────────────────────────────────────────────
 
-var workflow = AgenticRagWorkflow.Build(aiService, vectorStore, tavilyService, settings.Pipeline);
+var workflow = AgenticRagWorkflow.Build(aiService, vectorStore, tavilyService, settings.Pipeline, kbDescription);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Define the test query
-//
-// This is the canonical multi-source, multi-hop query from the article:
-// - Hop 1: NVIDIA's competitive risks from AMD  → search_10k
-// - Hop 2: AMD's post-2023 product strategy     → search_web
-// - Synthesis: How does hop-2 exacerbate hop-1?
+// Determine the query
+//   Priority: CLI args > DefaultQuery in config > interactive prompt
 // ─────────────────────────────────────────────────────────────────────────────
 
-var query = args.Length > 0
-    ? string.Join(" ", args)   // Allow passing a custom query via CLI args
-    : "What were NVIDIA's main competitive risks from AMD disclosed in their 2023 10-K filing, " +
-      "and how does AMD's recent product strategy (post-2023) exacerbate those specific risks?";
+string query;
+if (args.Length > 0)
+{
+    query = string.Join(" ", args);
+}
+else if (!string.IsNullOrWhiteSpace(settings.Knowledge.DefaultQuery))
+{
+    query = settings.Knowledge.DefaultQuery;
+    Console.WriteLine($"\n[Query] Using DefaultQuery from config:");
+}
+else
+{
+    Console.WriteLine("\nEnter your research question (multi-hop queries work best):");
+    Console.Write("> ");
+    query = Console.ReadLine() ?? string.Empty;
+    if (string.IsNullOrWhiteSpace(query))
+    {
+        Console.WriteLine("[Error] No query provided. Exiting.");
+        return;
+    }
+}
 
 Console.WriteLine($"\n[Query] {query}");
 

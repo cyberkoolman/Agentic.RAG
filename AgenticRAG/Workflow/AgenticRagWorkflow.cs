@@ -18,7 +18,7 @@ namespace AgenticRAG.Workflow;
 ///       ▼                                                             │
 ///   [QueryRewriter] ◄──── StepSignal(n+1) ─── [Policy] ◄────────────┤
 ///       │ SearchRequest                           │ FinishSignal      │
-///       ├─── tool=="search_10k" ──► [VectorSearch]│                   │
+///       ├─── tool=="search_docs" ──► [VectorSearch]│                   │
 ///       └─── tool=="search_web" ──► [WebSearch]  ▼                   │
 ///                                    │       [Synthesis]              │
 ///                                    │ SearchResults  │ yield output  │
@@ -46,10 +46,11 @@ public static class AgenticRagWorkflow
         AzureAIService    aiService,
         VectorStore       vectorStore,
         TavilyService     tavilyService,
-        PipelineSettings  pipelineSettings)
+        PipelineSettings  pipelineSettings,
+        string            kbDescription = "")
     {
         // ── Instantiate executor nodes ────────────────────────────────────────
-        var planner       = new PlannerExecutor(aiService);
+        var planner       = new PlannerExecutor(aiService, kbDescription);
         var queryRewriter = new QueryRewriterExecutor(aiService);
         var vectorSearch  = new VectorSearchExecutor(aiService, vectorStore, pipelineSettings.InitialRetrievalTopK);
         var webSearch     = new WebSearchExecutor(tavilyService);
@@ -70,7 +71,7 @@ public static class AgenticRagWorkflow
             // 2. Route to the correct search tool based on SearchRequest.Tool
             //    The <SearchRequest> type parameter restricts these edges to SearchRequest messages only.
             .AddEdge<SearchRequest>(queryRewriter, vectorSearch,
-                condition: msg => msg?.Tool == "search_10k")
+                condition: msg => msg?.Tool == "search_docs")
             .AddEdge<SearchRequest>(queryRewriter, webSearch,
                 condition: msg => msg?.Tool == "search_web")
 
