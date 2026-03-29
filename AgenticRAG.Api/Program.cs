@@ -5,6 +5,7 @@
 using AgenticRAG.Api;
 using AgenticRAG.Configuration;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.DevUI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.Extensions.AI;
 
@@ -20,6 +21,7 @@ builder.Configuration
 
 builder.Services.AddHttpClient().AddLogging();
 builder.Services.AddAGUI();
+builder.Services.AddDevUI();
 
 // Allow the React/Next.js frontend to call this API
 builder.Services.AddCors(options =>
@@ -41,13 +43,15 @@ AIAgent agent = ragClient.AsAIAgent(
     name: "AgenticRAGAssistant",
     instructions: "You are a deep-thinking research assistant powered by an Agentic RAG pipeline.");
 
-// ─── Map the AG-UI endpoint ───────────────────────────────────────────────────
+// ─── Map endpoints ────────────────────────────────────────────────────────────
 
-app.MapAGUI("/", agent);
+app.MapAGUI("/api/run", agent);
+app.MapDevUI();              // Chat window at /devui
 
 Console.WriteLine(new string('═', 60));
 Console.WriteLine("  AG-UI Server — Agentic Deep-Thinking RAG Pipeline");
-Console.WriteLine("  POST /  →  Server-Sent Events (SSE) stream");
+Console.WriteLine("  Chat UI  →  http://localhost:8888/devui");
+Console.WriteLine("  AG-UI    →  POST http://localhost:8888/api/run");
 Console.WriteLine(new string('═', 60));
 
 await app.RunAsync();
