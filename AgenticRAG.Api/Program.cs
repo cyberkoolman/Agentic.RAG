@@ -1,11 +1,13 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Agentic RAG — AG-UI Server
-// Exposes the multi-hop RAG pipeline over the AG-UI protocol (SSE).
+// Exposes the multi-hop RAG pipeline over the AG-UI protocol (SSE)
+// and the DevUI chat window for interactive testing.
 
 using AgenticRAG.Api;
 using AgenticRAG.Configuration;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.DevUI;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.Extensions.AI;
 
@@ -23,27 +25,30 @@ builder.Services.AddHttpClient().AddLogging();
 builder.Services.AddAGUI();
 builder.Services.AddDevUI();
 
-// Allow the React/Next.js frontend to call this API
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
-WebApplication app = builder.Build();
-
-app.UseCors();
-
-// ─── Build the RAG agent ──────────────────────────────────────────────────────
+// ─── Register the RAG agent in DI so DevUI can discover it ───────────────────
 
 var settings = builder.Configuration.Get<AppSettings>()
     ?? throw new InvalidOperationException("Failed to load appsettings.");
 
 var ragClient = new RagWorkflowChatClient(settings);
 
-AIAgent agent = ragClient.AsAIAgent(
-    name: "AgenticRAGAssistant",
-    instructions: "You are a deep-thinking research assistant powered by an Agentic RAG pipeline.");
+builder.Services.AddAIAgent(
+    name:         "AgenticRAGAssistant",
+    instructions: "You are a deep-thinking research assistant powered by an Agentic RAG pipeline.",
+    chatClient:   ragClient);
 
-// ─── Map endpoints ────────────────────────────────────────────────────────────
+// ─── Build and configure the pipeline ────────────────────────────────────────
+
+WebApplication app = builder.Build();
+
+app.UseCors();
+
+// Resolve the registered agent for MapAGUI
+var agent = app.Services.GetRequiredService<AIAgent>();
 
 app.MapAGUI("/api/run", agent);
 app.MapDevUI();              // Chat window at /devui
