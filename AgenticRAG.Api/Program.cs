@@ -1,12 +1,10 @@
 // Copyright (c) Microsoft. All rights reserved.
-// Agentic RAG — AG-UI Server + DevUI Chat Window
+// Agentic RAG — DevUI Chat Window
 
 using AgenticRAG.Api;
 using AgenticRAG.Configuration;
-using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.DevUI;
 using Microsoft.Agents.AI.Hosting;
-using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.Agents.AI.Hosting.OpenAI;
 using Microsoft.Extensions.AI;
 
@@ -22,53 +20,34 @@ builder.Configuration
 
 builder.Services.AddHttpClient().AddLogging();
 
-builder.Services.AddCors(options =>
-    options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
-
-// ─── Register the RAG pipeline as an IChatClient ──────────────────────────────
+// ─── Register the RAG pipeline ────────────────────────────────────────────────
 
 var settings = builder.Configuration.Get<AppSettings>()
     ?? throw new InvalidOperationException("Failed to load appsettings.");
 
-var ragClient = new RagWorkflowChatClient(settings);
+builder.Services.AddSingleton<IChatClient>(new RagWorkflowChatClient(settings));
 
-// Register as IChatClient in DI so AddAIAgent can resolve it
-builder.Services.AddSingleton<IChatClient>(ragClient);
-
-// Register agent (resolves IChatClient from DI) — DevUI discovers this
 builder.AddAIAgent(
     name:         "AgenticRAGAssistant",
     instructions: "You are a deep-thinking research assistant powered by an Agentic RAG pipeline.");
 
-// ─── Required services for DevUI conversation and response endpoints ──────────
+// ─── DevUI services ───────────────────────────────────────────────────────────
 
 builder.Services.AddOpenAIResponses();
 builder.Services.AddOpenAIConversations();
-builder.Services.AddAGUI();
 builder.Services.AddDevUI();
 
-// ─── Build ────────────────────────────────────────────────────────────────────
+// ─── Build and map ────────────────────────────────────────────────────────────
 
 WebApplication app = builder.Build();
 
-app.UseCors();
-
-// ─── Map endpoints ────────────────────────────────────────────────────────────
-
-// AG-UI SSE endpoint (for console client / external frontends)
-var agent = app.Services.GetRequiredKeyedService<AIAgent>("AgenticRAGAssistant");
-app.MapAGUI("/api/run", agent);
-
-// DevUI requires these three mappings
-app.MapOpenAIResponses();       // POST /v1/responses
-app.MapOpenAIConversations();   // POST|GET /v1/conversations/*
-app.MapDevUI();                 // GET  /devui
+app.MapOpenAIResponses();
+app.MapOpenAIConversations();
+app.MapDevUI();
 
 Console.WriteLine(new string('═', 60));
-Console.WriteLine("  AG-UI Server — Agentic Deep-Thinking RAG Pipeline");
-Console.WriteLine("  DevUI    →  http://localhost:8888/devui");
-Console.WriteLine("  AG-UI    →  POST http://localhost:8888/api/run");
+Console.WriteLine("  Agentic RAG — DevUI Chat");
+Console.WriteLine("  http://localhost:8888/devui");
 Console.WriteLine(new string('═', 60));
 
 await app.RunAsync();
