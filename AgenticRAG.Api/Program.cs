@@ -48,7 +48,7 @@ WebApplication app = builder.Build();
 app.UseCors();
 
 // Resolve the registered agent for MapAGUI
-var agent = app.Services.GetRequiredService<AIAgent>();
+var agent = app.Services.GetRequiredKeyedService<AIAgent>("AgenticRAGAssistant");
 
 app.MapAGUI("/api/run", agent);
 app.MapDevUI();              // Chat window at /devui
