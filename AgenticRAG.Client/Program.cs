@@ -8,7 +8,7 @@ using Microsoft.Extensions.AI;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-string serverUrl = Environment.GetEnvironmentVariable("AGUI_SERVER_URL") ?? "http://localhost:8888";
+string serverUrl = Environment.GetEnvironmentVariable("AGUI_SERVER_URL") ?? "http://localhost:8888/api/run";
 
 Console.WriteLine(new string('═', 60));
 Console.WriteLine("  Agentic RAG — AG-UI Chat Client");
