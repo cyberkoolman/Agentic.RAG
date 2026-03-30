@@ -54,13 +54,6 @@ if (sources.Count == 0)
     Console.ResetColor();
 }
 
-// Human-readable description injected into the Planner's system prompt
-// so it knows what documents are available for search_docs queries.
-var kbDescription = sources.Count > 0
-    ? string.Join(", ", sources.Select(s =>
-        string.IsNullOrWhiteSpace(s.Description) ? s.Name : $"{s.Name} ({s.Description})"))
-    : "(no internal documents configured)";
-
 Console.WriteLine("\n[Init] Building knowledge base...");
 foreach (var s in sources)
     Console.WriteLine($"  • {s.Name}");
@@ -73,7 +66,17 @@ Console.WriteLine($"[Init] Knowledge base ready — {vectorStore.DocumentCount} 
 // Build the workflow graph
 // ─────────────────────────────────────────────────────────────────────────────
 
-var workflow = AgenticRagWorkflow.Build(aiService, vectorStore, tavilyService, settings.Pipeline, kbDescription);
+var kbState = new KnowledgeBaseState();
+if (documents.Count > 0)
+{
+    kbState.Description = sources.Count > 0
+        ? string.Join(", ", sources.Select(s =>
+            string.IsNullOrWhiteSpace(s.Description) ? s.Name : $"{s.Name} ({s.Description})"))
+        : "(no internal documents configured)";
+    kbState.HasSource = true;
+}
+
+var workflow = AgenticRagWorkflow.Build(aiService, vectorStore, tavilyService, documentLoader, kbState, settings.Pipeline);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Determine the query
@@ -114,7 +117,7 @@ var startTime = DateTimeOffset.UtcNow;
 
 await using var run = await InProcessExecution.RunStreamingAsync(
     workflow,
-    new UserQuery(query));
+    query);
 
 string? finalAnswer = null;
 

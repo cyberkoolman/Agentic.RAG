@@ -43,14 +43,17 @@ namespace AgenticRAG.Workflow;
 public static class AgenticRagWorkflow
 {
     public static Microsoft.Agents.AI.Workflows.Workflow Build(
-        AzureAIService    aiService,
-        VectorStore       vectorStore,
-        TavilyService     tavilyService,
-        PipelineSettings  pipelineSettings,
-        string            kbDescription = "")
+        AzureAIService     aiService,
+        VectorStore        vectorStore,
+        TavilyService      tavilyService,
+        DocumentLoader     documentLoader,
+        KnowledgeBaseState kbState,
+        PipelineSettings   pipelineSettings,
+        string             name = "")
     {
         // ── Instantiate executor nodes ────────────────────────────────────────
-        var planner       = new PlannerExecutor(aiService, kbDescription);
+        var gateway       = new GatewayExecutor(aiService, vectorStore, documentLoader, kbState);
+        var planner       = new PlannerExecutor(aiService, kbState);
         var queryRewriter = new QueryRewriterExecutor(aiService);
         var vectorSearch  = new VectorSearchExecutor(aiService, vectorStore, pipelineSettings.InitialRetrievalTopK);
         var webSearch     = new WebSearchExecutor(tavilyService);
@@ -63,7 +66,11 @@ public static class AgenticRagWorkflow
         // ── Wire graph edges ──────────────────────────────────────────────────
         // AddEdge<T> type parameter acts as an implicit message-type filter:
         // only messages of type T are evaluated against the optional condition.
-        var workflow = new WorkflowBuilder(planner)
+        var workflowBuilder = new WorkflowBuilder(gateway)
+
+            // 0. Gateway routes queries to Planner (source-loading and no-source
+            //    cases are handled internally via YieldOutputAsync)
+            .AddEdge<UserQuery>(gateway, planner, condition: _ => true)
 
             // 1. Planning → first research step (unconditional, single message type)
             .AddEdge(planner, queryRewriter)
@@ -94,9 +101,11 @@ public static class AgenticRagWorkflow
             .AddEdge<FinishSignal>(policy, synthesis, condition: _ => true)
 
             // 7. Synthesis yields the workflow output and terminates the loop
-            .WithOutputFrom(synthesis)
-            .Build();
+            .WithOutputFrom(synthesis);
 
-        return workflow;
+        if (!string.IsNullOrEmpty(name))
+            workflowBuilder = workflowBuilder.WithName(name);
+
+        return workflowBuilder.Build();
     }
 }

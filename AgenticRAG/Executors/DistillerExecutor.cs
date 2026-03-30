@@ -51,7 +51,8 @@ public sealed class DistillerExecutor : Executor<RankedResults>
 
             Rules:
             - Preserve exact numbers, dates, product names, and proper nouns.
-            - Cite each fact inline using [Source Name] notation.
+            - Cite each fact inline using [Source Name](URL) markdown-link format when a URL is available, or [Source Name] when no URL is present.
+            - Use the EXACT URL from the "URL:" field — never construct, shorten, or modify it.
             - Remove redundancy; never repeat the same fact twice.
             - Do NOT speculate or add information not present in the documents.
             - Keep the distilled paragraph under 300 words.

@@ -18,22 +18,18 @@ namespace AgenticRAG.Api;
 ///   • User sends a query  — runs the multi-hop RAG pipeline.
 ///
 /// Multiple sources can be added at any time; each one is appended to
-/// the shared VectorStore and the Planner's KB description is updated.
+/// the shared VectorStore and the KB description is updated.
 /// </summary>
 public sealed class RagWorkflowChatClient : IChatClient
 {
-    // ── Services (created once, cheap) ────────────────────────────────────
-    private readonly AppSettings   _settings;
-    private readonly AzureAIService   _ai;
-    private readonly VectorStore      _store;
-    private readonly TavilyService    _tavily;
-    private readonly DocumentLoader   _loader;
-    private readonly SemaphoreSlim    _lock = new(1, 1);
-
-    // ── State ─────────────────────────────────────────────────────────────
-    private bool   _hasSource;
-    private string _kbDescription = "";
-    private Microsoft.Agents.AI.Workflows.Workflow? _workflow;
+    private readonly AppSettings        _settings;
+    private readonly AzureAIService     _ai;
+    private readonly VectorStore        _store;
+    private readonly TavilyService      _tavily;
+    private readonly DocumentLoader     _loader;
+    private readonly KnowledgeBaseState _kbState;
+    private readonly SemaphoreSlim      _lock = new(1, 1);
+    private Microsoft.Agents.AI.Workflows.Workflow _workflow;
 
     public RagWorkflowChatClient(AppSettings settings)
     {
@@ -42,6 +38,8 @@ public sealed class RagWorkflowChatClient : IChatClient
         _store    = new VectorStore();
         _tavily   = new TavilyService(settings);
         _loader   = new DocumentLoader(settings);
+        _kbState  = new KnowledgeBaseState();
+        _workflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, settings.Pipeline);
     }
 
     // ── IChatClient ────────────────────────────────────────────────────────
@@ -69,7 +67,6 @@ public sealed class RagWorkflowChatClient : IChatClient
         var userText = chatMessages
             .LastOrDefault(m => m.Role == ChatRole.User)?.Text?.Trim() ?? "";
 
-        // ── Does the message contain a URL? ───────────────────────────────
         var url = ExtractUrl(userText);
         if (url is not null)
         {
@@ -78,8 +75,7 @@ public sealed class RagWorkflowChatClient : IChatClient
             yield break;
         }
 
-        // ── No source loaded yet ──────────────────────────────────────────
-        if (!_hasSource)
+        if (!_kbState.HasSource)
         {
             yield return Text(
                 "I'm ready! Please share a URL (or paste a file path) to load your " +
@@ -87,7 +83,6 @@ public sealed class RagWorkflowChatClient : IChatClient
             yield break;
         }
 
-        // ── Run the RAG pipeline ──────────────────────────────────────────
         await foreach (var u in RunPipelineAsync(userText, ct))
             yield return u;
     }
@@ -109,23 +104,17 @@ public sealed class RagWorkflowChatClient : IChatClient
 
             var source = new DocumentSource
             {
-                Name        = UrlToName(url),
-                Url         = url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : "",
-                FilePath    = url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? "" : url,
-                Type        = "html",
-                Description = ""
+                Name     = UrlToName(url),
+                Url      = url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : "",
+                FilePath = url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? "" : url,
+                Type     = "html",
             };
 
             var docs = await _loader.LoadAllAsync([source], _ai, ct);
             _store.AddDocuments(docs);
+            _kbState.AppendSource(source.Name);
 
-            // Update KB description and rebuild the workflow
-            _kbDescription = string.IsNullOrEmpty(_kbDescription)
-                ? source.Name
-                : _kbDescription + ", " + source.Name;
-
-            _workflow  = AgenticRagWorkflow.Build(_ai, _store, _tavily, _settings.Pipeline, _kbDescription);
-            _hasSource = true;
+            _workflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
 
             Console.WriteLine($"[RAG] Source added: {source.Name} — {docs.Count} chunks, {_store.DocumentCount} total.");
 
@@ -149,8 +138,7 @@ public sealed class RagWorkflowChatClient : IChatClient
         Console.WriteLine($"\n[RAG] Query: {query}");
 
         string? answer = null;
-        await using var run = await InProcessExecution.RunStreamingAsync(
-            _workflow!, new UserQuery(query));
+        await using var run = await InProcessExecution.RunStreamingAsync(_workflow, query);
 
         await foreach (var evt in run.WatchStreamAsync())
         {
@@ -163,7 +151,6 @@ public sealed class RagWorkflowChatClient : IChatClient
 
         answer ??= "The research pipeline did not produce an answer.";
 
-        // Stream sentence by sentence
         var sentences = answer.Split([". ", ".\n"], StringSplitOptions.None);
         for (int i = 0; i < sentences.Length; i++)
         {
@@ -181,18 +168,11 @@ public sealed class RagWorkflowChatClient : IChatClient
 
     private static string? ExtractUrl(string text)
     {
-        // Match http/https URLs or local file paths
-        var urlMatch = Regex.Match(text,
-            @"https?://[^\s]+",
-            RegexOptions.IgnoreCase);
+        var urlMatch = Regex.Match(text, @"https?://[^\s]+", RegexOptions.IgnoreCase);
         if (urlMatch.Success) return urlMatch.Value;
 
-        // Local file path: absolute path that exists
-        var pathMatch = Regex.Match(text,
-            @"[A-Za-z]:\\[^\s]+|/[^\s]+",
-            RegexOptions.IgnoreCase);
-        if (pathMatch.Success && File.Exists(pathMatch.Value))
-            return pathMatch.Value;
+        var pathMatch = Regex.Match(text, @"[A-Za-z]:\\[^\s]+|/[^\s]+", RegexOptions.IgnoreCase);
+        if (pathMatch.Success && File.Exists(pathMatch.Value)) return pathMatch.Value;
 
         return null;
     }

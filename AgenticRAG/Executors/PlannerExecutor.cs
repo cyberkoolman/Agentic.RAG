@@ -19,21 +19,16 @@ namespace AgenticRAG.Executors;
 [SendsMessage(typeof(StepSignal))]
 public sealed class PlannerExecutor : Executor<UserQuery>
 {
-    private readonly AzureAIService _ai;
-    private readonly string         _kbDescription;
+    private readonly AzureAIService     _ai;
+    private readonly KnowledgeBaseState _kbState;
 
     internal const string StateScope = "rag";
     internal const string StateKey   = "state";
 
-    /// <param name="kbDescription">
-    /// Human-readable list of indexed sources, e.g.
-    /// "NVIDIA 2024 10-K (SEC annual filing), AMD 2024 10-K (SEC annual filing)"
-    /// Built from DocumentSource.Name + Description in Program.cs.
-    /// </param>
-    public PlannerExecutor(AzureAIService ai, string kbDescription) : base("Planner")
+    public PlannerExecutor(AzureAIService ai, KnowledgeBaseState kbState) : base("Planner")
     {
-        _ai            = ai;
-        _kbDescription = kbDescription;
+        _ai      = ai;
+        _kbState = kbState;
     }
 
     public override async ValueTask HandleAsync(
@@ -50,7 +45,7 @@ public sealed class PlannerExecutor : Executor<UserQuery>
 
             Available tools:
               • search_docs — searches the internal knowledge base which contains:
-                {{_kbDescription}}
+                {{_kbState.Description}}
               • search_web  — performs a live web search (use for current events,
                 recent news, or anything not covered by the internal documents)
 

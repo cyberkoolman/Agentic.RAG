@@ -52,7 +52,7 @@ public sealed class SynthesisExecutor : Executor<FinishSignal>
 
             Guidelines:
             1. Perform multi-hop reasoning — explicitly connect facts across sources.
-            2. Use specific details: cite sources inline as [Source Name / Section].
+            2. Use specific details: cite sources inline as [Source Name / Section](URL) when a URL is present in the evidence, preserving markdown links exactly as provided.
             3. Structure the answer with clear headings if complexity warrants it.
             4. Be precise: include numbers, dates, product names where available.
             5. Address every aspect of the original query.
