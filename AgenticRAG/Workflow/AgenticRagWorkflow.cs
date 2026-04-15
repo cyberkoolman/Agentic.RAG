@@ -14,21 +14,21 @@ namespace AgenticRAG.Workflow;
 ///   UserQuery
 ///       │
 ///   [Planner]  ──────────────────────────────────────────────────────┐
-///       │ StepSignal(0)                                               │
-///       ▼                                                             │
-///   [QueryRewriter] ◄──── StepSignal(n+1) ─── [Policy] ◄────────────┤
-///       │ SearchRequest                           │ FinishSignal      │
-///       ├─── tool=="search_docs" ──► [VectorSearch]│                   │
+///       │ StepSignal(0)                                              │
+///       ▼                                                            │
+///   [QueryRewriter] ◄──── StepSignal(n+1) ─── [Policy] ◄─────────────┤
+///       │ SearchRequest                           │ FinishSignal     │
+///       ├─── tool=="search_docs" ──► [VectorSearch]│                 │
 ///       └─── tool=="search_web" ──► [WebSearch]  ▼                   │
-///                                    │       [Synthesis]              │
-///                                    │ SearchResults  │ yield output  │
+///                                    │       [Synthesis]             │
+///                                    │ SearchResults  │ yield output │
 ///                                    ▼               ▼               │
-///                              [Reranker]        workflow END         │
-///                                    │ RankedResults                  │
-///                                    ▼                                │
-///                              [Distiller]                            │
-///                                    │ DistilledContext               │
-///                                    ▼                                │
+///                              [Reranker]        workflow END        │
+///                                    │ RankedResults                 │
+///                                    ▼                               │
+///                              [Distiller]                           │
+///                                    │ DistilledContext              │
+///                                    ▼                               │
 ///                              [Reflection] ─── PolicySignal ────────┘
 ///
 /// Key design decisions:
