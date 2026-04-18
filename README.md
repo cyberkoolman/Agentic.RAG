@@ -1,6 +1,23 @@
 # Agentic Deep-Thinking RAG Pipeline
 
-A production-quality **Retrieval-Augmented Generation** system built on the **Microsoft Agent Framework**, **Azure AI Foundry**, and **Tavily Search**. Unlike standard RAG, this pipeline reasons iteratively — planning, searching, reflecting, and synthesising across multiple hops before delivering a final answer.
+A production-quality **Retrieval-Augmented Generation** system built on the **Microsoft Agent Framework**, **Azure AI Foundry**, and **Tavily Search**. The repository ships two contrasting RAG pipelines — a **Deep-Thinking Agentic** pipeline and a **One-Shot** pipeline — so you can compare quality, latency, and architecture side by side.
+
+---
+
+## Two Pipelines, Same Infrastructure
+
+| | **One-Shot RAG** | **Deep-Thinking Agentic RAG** |
+|---|---|---|
+| **Topology** | Linear (single pass) | Cyclical (agent-driven loop) |
+| **Planning** | None — raw query hits search directly | Multi-step tool-aware plan |
+| **Query optimization** | None | Per-step rewriting tuned to the search tool |
+| **Retrieval scope** | Vector search only | Vector search + Web search (tool-selected) |
+| **Post-retrieval** | Reranker → LLM answer | Reranker → Distiller → Reflection → Policy |
+| **Memory** | Stateless | RAGState tracks plan, findings, and history |
+| **Control flow** | One and done | Continue / Re-think / Finish loop |
+| **Best for** | Simple factual questions | Complex multi-hop queries across sources |
+
+See [`RAG.Comparison.md`](RAG.Comparison.md) for full ASCII architecture diagrams, a side-by-side query walkthrough, and LLM call count comparison.
 
 ---
 
@@ -25,6 +42,8 @@ This loop runs up to a configurable maximum of iterations, ensuring the model ne
 
 ## Architecture
 
+### Deep-Thinking Agentic RAG
+
 ```
 User Query
     │
@@ -45,7 +64,23 @@ User Query
                          [Reflection] ─── PolicySignal ──────────────┘
 ```
 
-See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full block diagram.
+### One-Shot RAG
+
+```
+User Query
+    │
+[Gateway] ──── (same URL/source handling)
+    │
+[QueryBridge] ─── raw query, no rewriting, no planning
+    │
+[VectorSearch] ── broad recall (top-K)
+    │
+[Reranker] ────── precision filter (top-3)
+    │
+[OneShotAnswer] ─ single LLM call → final answer
+```
+
+See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full Mermaid block diagram.
 
 ---
 
@@ -60,6 +95,8 @@ See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full block diag
 
 ## Executor Nodes
 
+### Deep-Thinking Pipeline
+
 | Node | Role |
 |---|---|
 | **Gateway** | Root node. Routes incoming messages: loads sources, rejects premature queries, or passes through to the Planner |
@@ -72,6 +109,16 @@ See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full block diag
 | **Reflection** | Evaluates research quality and updates the shared state |
 | **Policy** | Decides: continue researching (→ QueryRewriter) or finish (→ Synthesis) |
 | **Synthesis** | Writes the final, multi-hop answer with inline clickable citations |
+
+### One-Shot Pipeline
+
+| Node | Role |
+|---|---|
+| **Gateway** | Same root node (reused) — handles URL loading and source checks |
+| **QueryBridge** | Passes the raw query directly to vector search — no LLM call, no rewriting |
+| **VectorSearch** | Same retrieval (reused) — semantic + keyword + hybrid search |
+| **Reranker** | Same precision filter (reused) — LLM-based top-K selection |
+| **OneShotAnswer** | Single LLM call: raw reranked docs + query → answer. No distillation, no reflection |
 
 ---
 
@@ -123,9 +170,11 @@ dotnet run
 
 Open **http://localhost:8888/devui** in your browser.
 
-1. Select **AgenticRAGAssistant** from the agent dropdown.
-2. Paste a URL or file path to load a knowledge source — the pipeline will chunk and embed it.
-3. Ask any question. The deep-thinking loop runs automatically and streams the answer with clickable source citations.
+1. Select an agent from the dropdown:
+   - **Agentic-RAG** — deep-thinking multi-hop pipeline with planning, reflection, and iterative retrieval
+   - **OneShot-RAG** — single-pass linear pipeline for comparison
+2. Paste a URL or file path to load a knowledge source — the pipeline will chunk and embed it. Documents are shared across both agents.
+3. Ask any question. Try the same query in both agents to compare answer quality and depth.
 
 Multiple sources can be added at any time and accumulate in the shared knowledge base.
 
@@ -136,6 +185,14 @@ Multiple sources can be added at any time and accumulate in the shared knowledge
 ```bash
 cd AgenticRAG
 dotnet run
+```
+
+At startup you'll be prompted to select a pipeline mode:
+
+```
+Select pipeline:
+  [1] Deep-Thinking RAG  (multi-hop, agentic loop)
+  [2] One-Shot RAG       (single-pass, linear)
 ```
 
 Configure sources in `appsettings.Local.json` under `Knowledge.Sources`, or enter a query interactively at the prompt. Set `Knowledge.DefaultQuery` to skip the interactive prompt.
