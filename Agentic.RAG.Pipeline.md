@@ -86,4 +86,3 @@ flowchart LR
 
 ---
 
-*Based on: Fareed Khan — "Building an Agentic Deep-Thinking RAG Pipeline to Solve Complex Queries" · Level Up Coding · Oct 2025*
