@@ -81,12 +81,12 @@ if (documents.Count > 0)
 // ─────────────────────────────────────────────────────────────────────────────
 
 Console.WriteLine("\nSelect pipeline:");
-Console.WriteLine("  [1] Deep-Thinking RAG  (multi-hop, agentic loop)");
-Console.WriteLine("  [2] One-Shot RAG       (single-pass, linear)");
+Console.WriteLine("  [1] One-Shot RAG       (single-pass, linear)");
+Console.WriteLine("  [2] Deep-Thinking RAG  (multi-hop, agentic loop)");
 Console.Write("> ");
 
 var modeInput = Console.ReadLine()?.Trim();
-var useOneShot = modeInput == "2";
+var useOneShot = modeInput != "2";
 
 var pipelineLabel = useOneShot ? "One-Shot RAG" : "Deep-Thinking RAG";
 

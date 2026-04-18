@@ -1,6 +1,6 @@
 # Agentic Deep-Thinking RAG Pipeline
 
-A production-quality **Retrieval-Augmented Generation** system built on the **Microsoft Agent Framework**, **Azure AI Foundry**, and **Tavily Search**. The repository ships two contrasting RAG pipelines — a **Deep-Thinking Agentic** pipeline and a **One-Shot** pipeline — so you can compare quality, latency, and architecture side by side.
+A production-quality **Retrieval-Augmented Generation** system built on the **Microsoft Agent Framework**, **Azure AI Foundry**, and **Tavily Search**. The repository ships two contrasting RAG pipelines — a **One-Shot** pipeline and a **Deep-Thinking Agentic** pipeline — so you can compare quality, latency, and architecture side by side.
 
 ---
 
@@ -21,11 +21,25 @@ See [`RAG.Comparison.md`](RAG.Comparison.md) for full ASCII architecture diagram
 
 ---
 
+## What Is One-Shot RAG?
+
+One-Shot RAG is the standard, single-pass pattern: embed a query → retrieve chunks → stuff them into a prompt → generate. It's fast, cheap, and works well for simple factual lookups against a single source.
+
+The pipeline is intentionally minimal:
+
+1. **Search** — embed the raw user query and retrieve the top-K documents from the vector store.
+2. **Rerank** — precision-filter the candidates using an LLM judge.
+3. **Answer** — pass the top results and the original question to the LLM in a single call.
+
+No planning. No query rewriting. No reflection. One pass and done.
+
+This works fine for straightforward questions ("What was NVIDIA's total revenue?") but breaks down for complex, multi-part questions that require connecting information across sources or combining internal documents with current web data.
+
+---
+
 ## What Is Deep-Thinking RAG?
 
-Standard RAG is a single-shot pattern: embed a query → retrieve chunks → stuff them into a prompt → generate. It works for simple lookups but breaks down for complex, multi-part questions that require connecting information across sources or combining internal documents with current web data.
-
-**Deep-Thinking RAG** treats answering as a research process:
+**Deep-Thinking RAG** treats answering as a research process, replacing the linear one-shot approach with a cyclic, agent-driven reasoning loop:
 
 1. **Plan** — decompose the question into an ordered set of sub-questions, choosing the right tool for each step (`search_docs` for the internal knowledge base, `search_web` for live results).
 2. **Rewrite** — rephrase each sub-question for optimal retrieval at that point in the research.
@@ -41,6 +55,22 @@ This loop runs up to a configurable maximum of iterations, ensuring the model ne
 ---
 
 ## Architecture
+
+### One-Shot RAG
+
+```
+User Query
+    │
+[Gateway] ──── (URL/source handling)
+    │
+[QueryBridge] ─── raw query, no rewriting, no planning
+    │
+[VectorSearch] ── broad recall (top-K)
+    │
+[Reranker] ────── precision filter (top-3)
+    │
+[OneShotAnswer] ─ single LLM call → final answer
+```
 
 ### Deep-Thinking Agentic RAG
 
@@ -64,22 +94,6 @@ User Query
                          [Reflection] ─── PolicySignal ──────────────┘
 ```
 
-### One-Shot RAG
-
-```
-User Query
-    │
-[Gateway] ──── (same URL/source handling)
-    │
-[QueryBridge] ─── raw query, no rewriting, no planning
-    │
-[VectorSearch] ── broad recall (top-K)
-    │
-[Reranker] ────── precision filter (top-3)
-    │
-[OneShotAnswer] ─ single LLM call → final answer
-```
-
 See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full Mermaid block diagram.
 
 ---
@@ -95,6 +109,16 @@ See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full Mermaid bl
 
 ## Executor Nodes
 
+### One-Shot Pipeline
+
+| Node | Role |
+|---|---|
+| **Gateway** | Root node (reused) — handles URL loading and source checks |
+| **QueryBridge** | Passes the raw query directly to vector search — no LLM call, no rewriting |
+| **VectorSearch** | Semantic + keyword + hybrid search against the in-memory vector store (reused) |
+| **Reranker** | LLM-based precision filtering — keeps the top-K most relevant chunks (reused) |
+| **OneShotAnswer** | Single LLM call: raw reranked docs + query → answer. No distillation, no reflection |
+
 ### Deep-Thinking Pipeline
 
 | Node | Role |
@@ -109,16 +133,6 @@ See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full Mermaid bl
 | **Reflection** | Evaluates research quality and updates the shared state |
 | **Policy** | Decides: continue researching (→ QueryRewriter) or finish (→ Synthesis) |
 | **Synthesis** | Writes the final, multi-hop answer with inline clickable citations |
-
-### One-Shot Pipeline
-
-| Node | Role |
-|---|---|
-| **Gateway** | Same root node (reused) — handles URL loading and source checks |
-| **QueryBridge** | Passes the raw query directly to vector search — no LLM call, no rewriting |
-| **VectorSearch** | Same retrieval (reused) — semantic + keyword + hybrid search |
-| **Reranker** | Same precision filter (reused) — LLM-based top-K selection |
-| **OneShotAnswer** | Single LLM call: raw reranked docs + query → answer. No distillation, no reflection |
 
 ---
 
@@ -171,8 +185,8 @@ dotnet run
 Open **http://localhost:8888/devui** in your browser.
 
 1. Select an agent from the dropdown:
+   - **OneShot-RAG** — single-pass linear pipeline (fast, simple)
    - **Agentic-RAG** — deep-thinking multi-hop pipeline with planning, reflection, and iterative retrieval
-   - **OneShot-RAG** — single-pass linear pipeline for comparison
 2. Paste a URL or file path to load a knowledge source — the pipeline will chunk and embed it. Documents are shared across both agents.
 3. Ask any question. Try the same query in both agents to compare answer quality and depth.
 
@@ -191,8 +205,8 @@ At startup you'll be prompted to select a pipeline mode:
 
 ```
 Select pipeline:
-  [1] Deep-Thinking RAG  (multi-hop, agentic loop)
-  [2] One-Shot RAG       (single-pass, linear)
+  [1] One-Shot RAG       (single-pass, linear)
+  [2] Deep-Thinking RAG  (multi-hop, agentic loop)
 ```
 
 Configure sources in `appsettings.Local.json` under `Knowledge.Sources`, or enter a query interactively at the prompt. Set `Knowledge.DefaultQuery` to skip the interactive prompt.
