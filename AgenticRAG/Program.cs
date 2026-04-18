@@ -76,7 +76,25 @@ if (documents.Count > 0)
     kbState.HasSource = true;
 }
 
-var workflow = AgenticRagWorkflow.Build(aiService, vectorStore, tavilyService, documentLoader, kbState, settings.Pipeline);
+// ─────────────────────────────────────────────────────────────────────────────
+// Select pipeline mode
+// ─────────────────────────────────────────────────────────────────────────────
+
+Console.WriteLine("\nSelect pipeline:");
+Console.WriteLine("  [1] Deep-Thinking RAG  (multi-hop, agentic loop)");
+Console.WriteLine("  [2] One-Shot RAG       (single-pass, linear)");
+Console.Write("> ");
+
+var modeInput = Console.ReadLine()?.Trim();
+var useOneShot = modeInput == "2";
+
+var pipelineLabel = useOneShot ? "One-Shot RAG" : "Deep-Thinking RAG";
+
+var workflow = useOneShot
+    ? OneShotRagWorkflow.Build(aiService, vectorStore, tavilyService, documentLoader, kbState, settings.Pipeline)
+    : AgenticRagWorkflow.Build(aiService, vectorStore, tavilyService, documentLoader, kbState, settings.Pipeline);
+
+Console.WriteLine($"[Pipeline] Selected: {pipelineLabel}");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Determine the query
@@ -111,7 +129,7 @@ Console.WriteLine($"\n[Query] {query}");
 // Run the workflow
 // ─────────────────────────────────────────────────────────────────────────────
 
-Console.WriteLine("\n[Pipeline] Starting Deep-Thinking RAG loop...\n");
+Console.WriteLine($"\n[Pipeline] Starting {pipelineLabel} pipeline...\n");
 
 var startTime = DateTimeOffset.UtcNow;
 

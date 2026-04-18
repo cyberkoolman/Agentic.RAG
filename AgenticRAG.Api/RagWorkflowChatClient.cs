@@ -29,7 +29,8 @@ public sealed class RagWorkflowChatClient : IChatClient
     private readonly DocumentLoader     _loader;
     private readonly KnowledgeBaseState _kbState;
     private readonly SemaphoreSlim      _lock = new(1, 1);
-    private Microsoft.Agents.AI.Workflows.Workflow _workflow;
+    private Microsoft.Agents.AI.Workflows.Workflow _agenticWorkflow;
+    private Microsoft.Agents.AI.Workflows.Workflow _oneShotWorkflow;
 
     public RagWorkflowChatClient(AppSettings settings)
     {
@@ -39,7 +40,8 @@ public sealed class RagWorkflowChatClient : IChatClient
         _tavily   = new TavilyService(settings);
         _loader   = new DocumentLoader(settings);
         _kbState  = new KnowledgeBaseState();
-        _workflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, settings.Pipeline);
+        _agenticWorkflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, settings.Pipeline);
+        _oneShotWorkflow = OneShotRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, settings.Pipeline);
     }
 
     // ── IChatClient ────────────────────────────────────────────────────────
@@ -83,7 +85,16 @@ public sealed class RagWorkflowChatClient : IChatClient
             yield break;
         }
 
-        await foreach (var u in RunPipelineAsync(userText, ct))
+        // Detect [oneshot] prefix to route to the one-shot pipeline
+        var useOneShot = userText.StartsWith("[oneshot]", StringComparison.OrdinalIgnoreCase);
+        var queryText  = useOneShot
+            ? userText["[oneshot]".Length..].Trim()
+            : userText;
+
+        if (useOneShot)
+            yield return Text("*Running One-Shot RAG pipeline (single-pass, no planning)…*\n\n");
+
+        await foreach (var u in RunPipelineAsync(queryText, useOneShot, ct))
             yield return u;
     }
 
@@ -114,7 +125,8 @@ public sealed class RagWorkflowChatClient : IChatClient
             _store.AddDocuments(docs);
             _kbState.AppendSource(source.Name);
 
-            _workflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
+            _agenticWorkflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
+            _oneShotWorkflow = OneShotRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
 
             Console.WriteLine($"[RAG] Source added: {source.Name} — {docs.Count} chunks, {_store.DocumentCount} total.");
 
@@ -133,12 +145,16 @@ public sealed class RagWorkflowChatClient : IChatClient
 
     private async IAsyncEnumerable<ChatResponseUpdate> RunPipelineAsync(
         string query,
+        bool useOneShot,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        Console.WriteLine($"\n[RAG] Query: {query}");
+        var pipelineLabel = useOneShot ? "One-Shot" : "Deep-Thinking";
+        Console.WriteLine($"\n[RAG] Query ({pipelineLabel}): {query}");
+
+        var workflow = useOneShot ? _oneShotWorkflow : _agenticWorkflow;
 
         string? answer = null;
-        await using var run = await InProcessExecution.RunStreamingAsync(_workflow, query);
+        await using var run = await InProcessExecution.RunStreamingAsync(workflow, query);
 
         await foreach (var evt in run.WatchStreamAsync())
         {
