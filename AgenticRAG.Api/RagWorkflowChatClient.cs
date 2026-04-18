@@ -10,12 +10,12 @@ using Microsoft.Extensions.AI;
 namespace AgenticRAG.Api;
 
 /// <summary>
-/// Stateful IChatClient that wraps the Agentic RAG pipeline.
+/// Stateful IChatClient that wraps a RAG pipeline (agentic or one-shot).
 ///
 /// Behaviour:
 ///   • On startup          — idle, no documents loaded.
 ///   • User sends a URL    — fetches, chunks, embeds, and indexes it.
-///   • User sends a query  — runs the multi-hop RAG pipeline.
+///   • User sends a query  — runs the configured RAG pipeline.
 ///
 /// Multiple sources can be added at any time; each one is appended to
 /// the shared VectorStore and the KB description is updated.
@@ -28,26 +28,53 @@ public sealed class RagWorkflowChatClient : IChatClient
     private readonly TavilyService      _tavily;
     private readonly DocumentLoader     _loader;
     private readonly KnowledgeBaseState _kbState;
+    private readonly bool               _useOneShot;
     private readonly SemaphoreSlim      _lock = new(1, 1);
-    private Microsoft.Agents.AI.Workflows.Workflow _agenticWorkflow;
-    private Microsoft.Agents.AI.Workflows.Workflow _oneShotWorkflow;
+    private Microsoft.Agents.AI.Workflows.Workflow _workflow;
 
-    public RagWorkflowChatClient(AppSettings settings)
+    /// <summary>
+    /// Creates a standalone client that owns all its services.
+    /// Used by the console app; for the API prefer the shared-services constructor.
+    /// </summary>
+    public RagWorkflowChatClient(AppSettings settings, bool useOneShot = false)
+        : this(settings,
+               new AzureAIService(settings),
+               new VectorStore(),
+               new TavilyService(settings),
+               new DocumentLoader(settings),
+               new KnowledgeBaseState(),
+               useOneShot)
+    { }
+
+    /// <summary>
+    /// Creates a client that shares services with another instance.
+    /// This ensures documents indexed by one agent are visible to the other.
+    /// </summary>
+    public RagWorkflowChatClient(
+        AppSettings        settings,
+        AzureAIService     ai,
+        VectorStore        store,
+        TavilyService      tavily,
+        DocumentLoader     loader,
+        KnowledgeBaseState kbState,
+        bool               useOneShot)
     {
-        _settings = settings;
-        _ai       = new AzureAIService(settings);
-        _store    = new VectorStore();
-        _tavily   = new TavilyService(settings);
-        _loader   = new DocumentLoader(settings);
-        _kbState  = new KnowledgeBaseState();
-        _agenticWorkflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, settings.Pipeline);
-        _oneShotWorkflow = OneShotRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, settings.Pipeline);
+        _settings  = settings;
+        _ai        = ai;
+        _store     = store;
+        _tavily    = tavily;
+        _loader    = loader;
+        _kbState   = kbState;
+        _useOneShot = useOneShot;
+        _workflow  = BuildWorkflow();
     }
 
     // ── IChatClient ────────────────────────────────────────────────────────
 
     public ChatClientMetadata Metadata =>
-        new("AgenticRAG", providerUri: null, defaultModelId: "agentic-rag-pipeline");
+        new(_useOneShot ? "OneShotRAG" : "AgenticRAG",
+            providerUri: null,
+            defaultModelId: _useOneShot ? "oneshot-rag-pipeline" : "agentic-rag-pipeline");
 
     public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> chatMessages,
@@ -85,16 +112,7 @@ public sealed class RagWorkflowChatClient : IChatClient
             yield break;
         }
 
-        // Detect [oneshot] prefix to route to the one-shot pipeline
-        var useOneShot = userText.StartsWith("[oneshot]", StringComparison.OrdinalIgnoreCase);
-        var queryText  = useOneShot
-            ? userText["[oneshot]".Length..].Trim()
-            : userText;
-
-        if (useOneShot)
-            yield return Text("*Running One-Shot RAG pipeline (single-pass, no planning)…*\n\n");
-
-        await foreach (var u in RunPipelineAsync(queryText, useOneShot, ct))
+        await foreach (var u in RunPipelineAsync(userText, ct))
             yield return u;
     }
 
@@ -125,8 +143,7 @@ public sealed class RagWorkflowChatClient : IChatClient
             _store.AddDocuments(docs);
             _kbState.AppendSource(source.Name);
 
-            _agenticWorkflow = AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
-            _oneShotWorkflow = OneShotRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
+            _workflow = BuildWorkflow();
 
             Console.WriteLine($"[RAG] Source added: {source.Name} — {docs.Count} chunks, {_store.DocumentCount} total.");
 
@@ -145,16 +162,13 @@ public sealed class RagWorkflowChatClient : IChatClient
 
     private async IAsyncEnumerable<ChatResponseUpdate> RunPipelineAsync(
         string query,
-        bool useOneShot,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        var pipelineLabel = useOneShot ? "One-Shot" : "Deep-Thinking";
+        var pipelineLabel = _useOneShot ? "One-Shot" : "Deep-Thinking";
         Console.WriteLine($"\n[RAG] Query ({pipelineLabel}): {query}");
 
-        var workflow = useOneShot ? _oneShotWorkflow : _agenticWorkflow;
-
         string? answer = null;
-        await using var run = await InProcessExecution.RunStreamingAsync(workflow, query);
+        await using var run = await InProcessExecution.RunStreamingAsync(_workflow, query);
 
         await foreach (var evt in run.WatchStreamAsync())
         {
@@ -176,6 +190,13 @@ public sealed class RagWorkflowChatClient : IChatClient
             await Task.Delay(25, ct);
         }
     }
+
+    // ── Workflow factory ──────────────────────────────────────────────────
+
+    private Microsoft.Agents.AI.Workflows.Workflow BuildWorkflow() =>
+        _useOneShot
+            ? OneShotRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline)
+            : AgenticRagWorkflow.Build(_ai, _store, _tavily, _loader, _kbState, _settings.Pipeline);
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
