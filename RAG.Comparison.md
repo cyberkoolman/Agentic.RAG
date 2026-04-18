@@ -22,16 +22,16 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         ONE-SHOT RAG PIPELINE                          │
+│                         ONE-SHOT RAG PIPELINE                           │
 │                                                                         │
-│   ┌──────────┐    ┌───────────────┐    ┌──────────┐    ┌────────────┐  │
-│   │          │    │               │    │          │    │            │  │
-│   │ Gateway  ├───►│ Vector Search ├───►│ Reranker ├───►│   Answer   │  │
-│   │          │    │               │    │          │    │            │  │
-│   └──────────┘    └───────────────┘    └──────────┘    └────────────┘  │
+│   ┌──────────┐    ┌───────────────┐    ┌──────────┐    ┌────────────┐   │
+│   │          │    │               │    │          │    │            │   │
+│   │ Gateway  ├───►│ Vector Search ├───►│ Reranker ├───►│   Answer   │   │
+│   │          │    │               │    │          │    │            │   │
+│   └──────────┘    └───────────────┘    └──────────┘    └────────────┘   │
 │                                                                         │
-│   raw query        top-K docs          top-3 ranked    single LLM call │
-│   (no rewrite)     (broad recall)      (precision)     (yield output)  │
+│   raw query        top-K docs          top-3 ranked    single LLM call  │
+│   (no rewrite)     (broad recall)      (precision)     (yield output)   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -57,19 +57,19 @@
             │ SearchRequest
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│  VectorSearchExecutor │────►│  Azure AI Foundry    │
-│  (reused from Agentic)│     │  (Embedding Model)   │
+│  VectorSearchExecutor │────►│  Azure AI Foundry   │
+│  (reused from Agentic)│     │  (Embedding Model)  │
 │                       │     └─────────────────────┘
 │  • Strategy Supervisor│     ┌─────────────────────┐
-│    (vector/keyword/   │────►│  Azure AI Foundry    │
-│     hybrid selection) │     │  (Fast Model)        │
+│    (vector/keyword/   │────►│  Azure AI Foundry   │
+│     hybrid selection) │     │  (Fast Model)       │
 │  • In-memory index    │     └─────────────────────┘
 └───────────┬───────────┘
             │ SearchResults (top-K)
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│   RerankerExecutor    │────►│  Azure AI Foundry    │
-│  (reused from Agentic)│     │  (Fast Model)        │
+│   RerankerExecutor    │────►│  Azure AI Foundry   │
+│  (reused from Agentic)│     │  (Fast Model)       │
 │                       │     └─────────────────────┘
 │  Cross-encoder proxy: │
 │  scores & filters to  │
@@ -78,8 +78,8 @@
             │ RankedResults (top-3)
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│ OneShotAnswerExecutor │────►│  Azure AI Foundry    │
-│  (new, terminal node) │     │  (Reasoning Model)   │
+│ OneShotAnswerExecutor │────►│  Azure AI Foundry   │
+│  (new, terminal node) │     │  (Reasoning Model)  │
 │                       │     └─────────────────────┘
 │  Single LLM call:     │
 │  docs + query → answer│
@@ -113,30 +113,30 @@
 ### Component Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                         DEEP-THINKING AGENTIC RAG PIPELINE                          │
-│                                                                                      │
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                         DEEP-THINKING AGENTIC RAG PIPELINE                         │
+│                                                                                    │
 │   ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────────┐   ┌──────────────┐   │
 │   │         │   │         │   │          │   │              │   │              │   │
 │   │ Gateway ├──►│ Planner ├──►│ Rewriter ├──►│ Vector / Web ├──►│   Reranker   │   │
 │   │         │   │         │   │          │   │    Search    │   │              │   │
 │   └─────────┘   └─────────┘   └──────────┘   └──────────────┘   └──────┬───────┘   │
-│                                     ▲                                   │            │
-│                                     │                                   ▼            │
-│                               ┌─────┴─────┐   ┌────────────┐   ┌──────────────┐   │
-│                               │           │   │            │   │              │   │
-│                               │  Policy   │◄──┤ Reflection │◄──┤  Distiller   │   │
-│                               │           │   │            │   │              │   │
-│                               └─────┬─────┘   └────────────┘   └──────────────┘   │
-│                                     │                                               │
-│                          ┌──────────┴──────────┐                                    │
-│                          │ FINISH              │ CONTINUE / RE-THINK                │
-│                          ▼                     │ (loops back to Rewriter)            │
-│                   ┌─────────────┐              │                                    │
-│                   │  Synthesis  │              │                                    │
-│                   └─────────────┘              │                                    │
-│                                                                                      │
-└──────────────────────────────────────────────────────────────────────────────────────┘
+│                                     ▲                                   │          │
+│                                     │                                   ▼          │
+│                               ┌─────┴─────┐   ┌────────────┐   ┌──────────────┐    │
+│                               │           │   │            │   │              │    │
+│                               │  Policy   │◄──┤ Reflection │◄──┤  Distiller   │    │
+│                               │           │   │            │   │              │    │
+│                               └─────┬─────┘   └────────────┘   └──────────────┘    │
+│                                     │                                              │
+│                          ┌──────────┴──────────┐                                   │
+│                          │ FINISH              │ CONTINUE / RE-THINK               │
+│                          ▼                     │ (loops back to Rewriter)          │
+│                   ┌─────────────┐              │                                   │
+│                   │  Synthesis  │              │                                   │
+│                   └─────────────┘              │                                   │
+│                                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Service Diagram
@@ -153,8 +153,8 @@
             │ UserQuery
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│    PlannerExecutor    │────►│  Azure AI Foundry    │
-│                       │     │  (Reasoning Model)   │
+│    PlannerExecutor    │────►│  Azure AI Foundry   │
+│                       │     │  (Reasoning Model)  │
 │  Decomposes query     │     └─────────────────────┘
 │  into multi-step plan │
 │  with tool assignment │
@@ -163,8 +163,8 @@
             │ StepSignal(0)
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│ QueryRewriterExecutor │────►│  Azure AI Foundry    │
-│                       │     │  (Fast Model)        │
+│ QueryRewriterExecutor │────►│  Azure AI Foundry   │
+│                       │     │  (Fast Model)       │
 │  Optimizes sub-query  │     └─────────────────────┘
 │  for the target tool  │
 └─────────┬─────────────┘
@@ -172,35 +172,35 @@
     ┌─────┴──────┐
     ▼            ▼
 ┌────────┐  ┌────────────┐     ┌─────────────────────┐
-│ Vector │  │    Web      │────►│  Tavily Search API   │
-│ Search │  │   Search    │     └─────────────────────┘
+│ Vector │  │    Web      │────►│  Tavily Search API │
+│ Search │  │   Search    │     └────────────────────┘
 └───┬────┘  └─────┬──────┘
     └──────┬──────┘
            │ SearchResults
            ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│   RerankerExecutor    │────►│  Azure AI Foundry    │
-│   (Cross Encoder)     │     │  (Fast Model)        │
+│   RerankerExecutor    │────►│  Azure AI Foundry   │
+│   (Cross Encoder)     │     │  (Fast Model)       │
 └───────────┬───────────┘     └─────────────────────┘
             │ RankedResults
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│   DistillerExecutor   │────►│  Azure AI Foundry    │
-│   Compresses top-3    │     │  (Fast Model)        │
+│   DistillerExecutor   │────►│  Azure AI Foundry   │
+│   Compresses top-3    │     │  (Fast Model)       │
 │   into dense paragraph│     └─────────────────────┘
 └───────────┬───────────┘
             │ DistilledContext
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│  ReflectionExecutor   │────►│  Azure AI Foundry    │
-│  Updates RAGState     │     │  (Fast Model)        │
+│  ReflectionExecutor   │────►│  Azure AI Foundry   │
+│  Updates RAGState     │     │  (Fast Model)       │
 │  research history     │     └─────────────────────┘
 └───────────┬───────────┘
             │ PolicySignal
             ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│    PolicyExecutor     │────►│  Azure AI Foundry    │
-│                       │     │  (Reasoning Model)   │
+│    PolicyExecutor     │────►│  Azure AI Foundry   │
+│                       │     │  (Reasoning Model)  │
 │  CONTINUE → loop back │     └─────────────────────┘
 │  RE-THINK → revise    │
 │  FINISH   → synthesize│
@@ -208,8 +208,8 @@
           │ FinishSignal
           ▼
 ┌───────────────────────┐     ┌─────────────────────┐
-│  SynthesisExecutor    │────►│  Azure AI Foundry    │
-│  Multi-hop evidence   │     │  (Reasoning Model)   │
+│  SynthesisExecutor    │────►│  Azure AI Foundry   │
+│  Multi-hop evidence   │     │  (Reasoning Model)  │
 │  integration, cites   │     └─────────────────────┘
 │  all sources          │
 └───────────┬───────────┘
@@ -285,7 +285,7 @@ Both pipelines share the same underlying services — no duplication:
 │   │  AzureAIService │   │  VectorStore               │  │
 │   │  • Reasoning LLM│   │  • In-memory index         │  │
 │   │  • Fast LLM     │   │  • Vector / keyword /      │  │
-│   │  • Embeddings   │   │    hybrid search            │  │
+│   │  • Embeddings   │   │    hybrid search           │  │
 │   └─────────────────┘   └────────────────────────────┘  │
 │                                                         │
 │   ┌─────────────────┐   ┌────────────────────────────┐  │

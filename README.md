@@ -82,16 +82,16 @@ User Query
     │           Has source + query    ↓
 [Planner]  ─── decomposes into N sub-questions
     │
-[QueryRewriter] ◄──── StepSignal(n) ─── [Policy] ◄─────────────────┐
-    │                                        │ FinishSignal          │
-    ├── search_docs ──► [VectorSearch]       ▼                       │
-    └── search_web  ──► [WebSearch]    [Synthesis] → final answer    │
-                              │                                       │
-                         [Reranker]                                   │
-                              │                                       │
-                         [Distiller]                                  │
-                              │                                       │
-                         [Reflection] ─── PolicySignal ──────────────┘
+[QueryRewriter] ◄──── StepSignal(n) ─── [Policy] ◄─────────────────────┐
+    │                                        │ FinishSignal            │
+    ├── search_docs ──► [VectorSearch]       ▼                         │
+    └── search_web  ──► [WebSearch]    [Synthesis] → final answer      │
+                              │                                        │
+                         [Reranker]                                    │
+                              │                                        │
+                         [Distiller]                                   │
+                              │                                        │
+                         [Reflection] ─── PolicySignal ────────────────┘
 ```
 
 See [`Agentic.RAG.Pipeline.md`](Agentic.RAG.Pipeline.md) for the full Mermaid block diagram.
