@@ -130,7 +130,7 @@
 │                               └─────┬─────┘   └────────────┘   └──────────────┘    │
 │                                     │                                              │
 │                          ┌──────────┴──────────┐                                   │
-│                          │ FINISH              │ CONTINUE / RE-THINK               │
+│                          │ FINISH              │ CONTINUE                          │
 │                          ▼                     │ (loops back to Rewriter)          │
 │                   ┌─────────────┐              │                                   │
 │                   │  Synthesis  │              │                                   │
@@ -202,7 +202,6 @@
 │    PolicyExecutor     │────►│  Azure AI Foundry   │
 │                       │     │  (Reasoning Model)  │
 │  CONTINUE → loop back │     └─────────────────────┘
-│  RE-THINK → revise    │
 │  FINISH   → synthesize│
 └─────────┬─────────────┘
           │ FinishSignal
@@ -236,6 +235,36 @@
 | **6. Reflection** | None | After each step: "What did we learn? What's still missing?" |
 | **7. Answer** | Single LLM call with 3 chunks | Synthesis agent integrates all distilled evidence with multi-hop reasoning |
 | **Typical result** | Partially answers one aspect; misses the cross-source comparison entirely | Comprehensive answer covering all three aspects with inline citations |
+
+---
+
+## Why Results Diverge — Even on Seemingly Simple Queries
+
+A query like *"What are NVIDIA's top risk factors?"* looks like a One-Shot candidate — single source, single section. In practice, it often produces noticeably different results between the two pipelines. Here's why:
+
+### 1. Chunking splits the risk list
+
+A 10-K "Risk Factors" section can run 15–20 pages. After chunking at ~500 tokens, those risks are spread across 10–30 chunks. One-Shot embeds the raw question and retrieves the 10 chunks most semantically similar to the phrase *"top risk factors"* — which are often the **header chunk** and the first few named risks. The rest are never seen.
+
+The agentic pipeline decomposes the query into sub-questions like *"supply chain risks"*, *"competitive risks"*, and *"regulatory risks"* — each sub-question retrieves a different slice of the risk section.
+
+### 2. Query embedding vs. content embedding mismatch
+
+The phrase "top risk factors" is conceptually generic. Document chunks contain specific language: *"geopolitical export restrictions"*, *"customer concentration"*, *"semiconductor manufacturing lead times"*. The vector distance between the generic question embedding and specific chunk embeddings is often poor — the reranker can only work with what retrieval returns.
+
+The Query Rewriter solves this by generating targeted queries closer to the vocabulary actually used in the document.
+
+### 3. No coverage awareness in One-Shot
+
+One-Shot has no way to know that 3 retrieved chunks cover the same risk (supply chain) from three angles while 5 other risk categories were never retrieved. The Reflection + Policy loop catches this: the research history makes the gap explicit, and the Policy agent can continue to fill it.
+
+### Summary
+
+| Root Cause | One-Shot behavior | Agentic behavior |
+|---|---|---|
+| Chunking splits content across many chunks | Retrieves top-10 by proximity to the generic question | Each sub-question targets a specific slice |
+| Generic query ≠ specific document vocabulary | Embedding mismatch lowers recall | Query Rewriter aligns vocabulary to the document |
+| No coverage tracking | Cannot detect what was missed | Reflection logs findings; Policy detects gaps |
 
 ---
 

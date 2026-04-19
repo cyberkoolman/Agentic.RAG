@@ -9,8 +9,15 @@ namespace AgenticRAG.Executors;
 ///
 /// Receives a StepSignal from either the Planner (first iteration) or the Policy
 /// agent (subsequent iterations after a CONTINUE decision). Reads the current
-/// research step from shared state and reformulates the sub-question into the
-/// most effective search query for the assigned tool.
+/// research step from shared state and decides how to form the search query:
+///
+///   • search_docs, no prior history → passes the original user query through
+///     unchanged — identical to QueryBridge in the one-shot pipeline. The Planner's
+///     sub-question is a narrower paraphrase that retrieves different chunks; using
+///     the same starting query ensures both pipelines begin from the same retrieval.
+///   • search_docs, with prior history → rewrites incorporating previous findings
+///     so the query targets what is still unknown.
+///   • search_web (any step) → rewrites for current web search terminology.
 ///
 /// Outgoing message: SearchRequest → routed by conditional edges to
 ///   VectorSearchExecutor (tool == "search_docs") or
@@ -56,33 +63,44 @@ public sealed class QueryRewriterExecutor : Executor<StepSignal>
             ? $"\n\nPrevious findings:\n{string.Join("\n", state.ResearchHistory)}"
             : string.Empty;
 
-        const string SystemPrompt = """
-            You are a search query optimisation specialist.
+        string rewritten;
 
-            Rewrite the given sub-question into the single most effective search query for
-            the specified tool:
-              • search_docs → match the style of the query to its nature:
-                  - Conceptual/analytical questions (e.g. risks, strategy, performance, trends):
-                    keep as a natural-language sentence or phrase so semantic search surfaces
-                    the right document sections. Do NOT compress into a keyword bag.
-                    Example: "What risks did NVIDIA disclose?" → "NVIDIA disclosed risks in annual filing"
-                  - Specific fact lookups (exact section titles, product model numbers, financial
-                    figures, quoted phrases): use precise keyword form.
-                    Example: "What is Item 1A?" → "Item 1A Risk Factors"
-              • search_web  → use specific, current terms that will surface recent news,
-                              analyst reports, or press releases.
+        // For search_docs with no prior research context, use the original user query
+        // directly — identical to what QueryBridge sends in the one-shot pipeline.
+        // The Planner's sub-question is a narrower paraphrase and would retrieve different
+        // (often worse) chunks. Agentic value comes from steps 2+ where prior findings
+        // refocus the query on what is still unknown.
+        if (step.Tool == "search_docs" && state.ResearchHistory.Count == 0)
+        {
+            rewritten = state.UserQuery;
+            Console.WriteLine($"  Rewritten    : {rewritten}  [passthrough — original query]");
+        }
+        else
+        {
+            const string SystemPrompt = """
+                You are a search query optimisation specialist.
 
-            Return ONLY the rewritten query string — no explanation, no punctuation wrappers.
-            """;
+                Rewrite the given sub-question into the single most effective search query for
+                the specified tool:
+                  • search_docs → incorporate key findings from previous research steps to focus
+                                  the query on what is still unknown. Keep natural language phrasing
+                                  for conceptual questions; use precise keyword form only for exact
+                                  section titles, product model numbers, or financial figures.
+                  • search_web  → use specific, current terms that will surface recent news,
+                                  analyst reports, or press releases.
 
-        var rewritten = await _ai.CompleteAsync(
-            SystemPrompt,
-            $"Sub-question : {step.SubQuestion}\nTool         : {step.Tool}{historyContext}\n\nRewritten query:",
-            useReasoningModel: false,
-            cancellationToken);
+                Return ONLY the rewritten query string — no explanation, no punctuation wrappers.
+                """;
 
-        rewritten = rewritten.Trim().Trim('"').Trim('\'');
-        Console.WriteLine($"  Rewritten    : {rewritten}");
+            rewritten = await _ai.CompleteAsync(
+                SystemPrompt,
+                $"Sub-question : {step.SubQuestion}\nTool         : {step.Tool}{historyContext}\n\nRewritten query:",
+                useReasoningModel: false,
+                cancellationToken);
+
+            rewritten = rewritten.Trim().Trim('"').Trim('\'');
+            Console.WriteLine($"  Rewritten    : {rewritten}");
+        }
 
         // Persist the updated iteration count
         await context.QueueStateUpdateAsync(

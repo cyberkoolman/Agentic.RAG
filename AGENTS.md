@@ -111,6 +111,8 @@ Reads the current step from `RagState.Plan`, incorporates previous findings from
 
 Trivial mapper: passes the raw query text straight to `VectorSearchExecutor` as a `SearchRequest` with `Tool = "search_docs"`. No rewriting, no LLM call. This is what makes one-shot retrieval naive — the user's exact words become the search query.
 
+**Known limitation:** User queries are typically generic ("what are the risk factors?") while document chunks contain specific vocabulary ("geopolitical export restrictions", "customer concentration"). The embedding distance between a generic question and specific content is often poor. The Query Rewriter in the agentic pipeline addresses this by generating targeted queries aligned to the document's actual language. As a result, One-Shot can miss entire categories of content even when the source document fully covers the topic — the issue is vocabulary mismatch, not missing data.
+
 ---
 
 ### VectorSearch — `VectorSearchExecutor`
