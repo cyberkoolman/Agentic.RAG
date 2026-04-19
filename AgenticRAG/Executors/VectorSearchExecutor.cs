@@ -73,9 +73,17 @@ public sealed class VectorSearchExecutor : Executor<SearchRequest>
             You are a retrieval strategy supervisor for a document search engine.
 
             Choose the single best search strategy for the query:
-              • vector   — conceptual, thematic, or paraphrased questions
-              • keyword  — queries containing exact names, acronyms, numbers, or quoted phrases
-              • hybrid   — queries that benefit from both precision and semantic recall
+              • vector   — open-ended conceptual, thematic, or analytical questions where meaning
+                           matters more than exact words (e.g. "What risks does NVIDIA face?")
+              • keyword  — queries that are PRIMARILY composed of exact identifiers with no
+                           analytical component: specific product model numbers, version strings,
+                           financial figures, exact quoted phrases, or precise section titles
+                           (e.g. "Item 1A Risk Factors", "H100 SXM5", "Q4 FY2024 revenue")
+              • hybrid   — queries that mix a conceptual question with specific named entities
+                           or domain terms (e.g. "NVIDIA data center revenue growth drivers")
+
+            Note: a company name alone (e.g. "NVIDIA") is NOT sufficient to choose keyword.
+            Default to hybrid when in doubt.
 
             Respond with exactly one word: vector, keyword, or hybrid.
             """;

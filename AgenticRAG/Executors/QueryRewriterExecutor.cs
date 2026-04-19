@@ -61,8 +61,14 @@ public sealed class QueryRewriterExecutor : Executor<StepSignal>
 
             Rewrite the given sub-question into the single most effective search query for
             the specified tool:
-              • search_docs → use precise terminology matching the document's content style
-                              (e.g. exact section names, product names, numbers, or domain jargon).
+              • search_docs → match the style of the query to its nature:
+                  - Conceptual/analytical questions (e.g. risks, strategy, performance, trends):
+                    keep as a natural-language sentence or phrase so semantic search surfaces
+                    the right document sections. Do NOT compress into a keyword bag.
+                    Example: "What risks did NVIDIA disclose?" → "NVIDIA disclosed risks in annual filing"
+                  - Specific fact lookups (exact section titles, product model numbers, financial
+                    figures, quoted phrases): use precise keyword form.
+                    Example: "What is Item 1A?" → "Item 1A Risk Factors"
               • search_web  → use specific, current terms that will surface recent news,
                               analyst reports, or press releases.
 
