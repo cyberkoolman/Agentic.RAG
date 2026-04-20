@@ -9,7 +9,7 @@ namespace AgenticRAG.Executors;
 ///
 /// Handles SearchRequests routed here when tool == "search_web".
 /// Augments the static knowledge base with live web results, bridging the gap
-/// between the 10-K filing date and current events.
+/// between the source date and current events.
 ///
 /// Results are returned as RagDocument objects so they flow through the same
 /// Reranker → Distiller → Reflection funnel as internal documents.

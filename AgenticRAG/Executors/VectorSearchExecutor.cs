@@ -74,15 +74,14 @@ public sealed class VectorSearchExecutor : Executor<SearchRequest>
 
             Choose the single best search strategy for the query:
               • vector   — open-ended conceptual, thematic, or analytical questions where meaning
-                           matters more than exact words (e.g. "What risks does NVIDIA face?")
+                           matters more than exact words
               • keyword  — queries that are PRIMARILY composed of exact identifiers with no
                            analytical component: specific product model numbers, version strings,
                            financial figures, exact quoted phrases, or precise section titles
-                           (e.g. "Item 1A Risk Factors", "H100 SXM5", "Q4 FY2024 revenue")
               • hybrid   — queries that mix a conceptual question with specific named entities
-                           or domain terms (e.g. "NVIDIA data center revenue growth drivers")
+                           or domain terms
 
-            Note: a company name alone (e.g. "NVIDIA") is NOT sufficient to choose keyword.
+            Note: an entity or subject name alone is NOT sufficient to choose keyword.
             Default to hybrid when in doubt.
 
             Respond with exactly one word: vector, keyword, or hybrid.

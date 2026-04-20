@@ -84,41 +84,41 @@ flowchart LR
   OUTPUT --> EVAL
 ```
 
-## Phase-by-Phase ASCII Diagram
+## Phase-by-Phase Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                     DEEP-THINKING AGENTIC RAG — 6-PHASE LOOP                        │
-│                     "How a good researcher actually works"                           │
+│                     "How a good researcher actually works"                          │
 │                                                                                     │
 │                            User Query                                               │
 │                                │                                                    │
 │                                ▼                                                    │
-│   ┌─────────────────────────────────────────────────────────────────────────────┐  │
-│   │  Phase 1 — PLAN                                                             │  │
-│   │  "Figure out what to find before you start looking"                         │  │
-│   │                                                                             │  │
-│   │  Planner breaks the question into N sub-questions.                          │  │
-│   │  Each gets a tool:   search_docs  (internal)   or   search_web  (live)      │  │
-│   └────────────────────────────┬────────────────────────────────────────────────┘  │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│   │  Phase 1 — PLAN                                                             │   │
+│   │  "Figure out what to find before you start looking"                         │   │
+│   │                                                                             │   │
+│   │  Planner breaks the question into N sub-questions.                          │   │
+│   │  Each gets a tool:   search_docs  (internal)   or   search_web  (live)      │   │
+│   └────────────────────────────┬────────────────────────────────────────────────┘   │
 │                                │ StepSignal(0)                                      │
-│   ┌────────────────────────────▼────────────────────────────────────────────────┐  │
-│   │  ↻  RESEARCH LOOP  ──────────────────────────────────────────────────────┐  │  │
+│   ┌────────────────────────────▼────────────────────────────────────────────────┐   │
+│   │  ↻  RESEARCH LOOP  ──────────────────────────────────────────────────────┐  │   │
 │   │  │                                                                        │  │  │
 │   │  │  Phase 2 — RETRIEVE   "Cast a wide net"                                │  │  │
 │   │  │                                                                        │  │  │
-│   │  │     ┌──────────────────────────┐   ┌──────────────────────────┐       │  │  │
-│   │  │     │      search_docs         │   │       search_web          │       │  │  │
-│   │  │     │  Vector / Keyword /      │   │  Tavily · live results    │       │  │  │
-│   │  │     │  Hybrid  ·  Top 10       │   │  Top 5 web pages          │       │  │  │
-│   │  │     └────────────┬─────────────┘   └─────────────┬────────────┘       │  │  │
+│   │  │     ┌──────────────────────────┐   ┌──────────────────────────┐        │  │  │
+│   │  │     │      search_docs         │   │       search_web         │        │  │  │
+│   │  │     │  Vector / Keyword /      │   │  Tavily · live results   │        │  │  │
+│   │  │     │  Hybrid  ·  Top 10       │   │  Top 5 web pages         │        │  │  │
+│   │  │     └────────────┬─────────────┘   └─────────────┬────────────┘        │  │  │
 │   │  │                  └──────────────┬─────────────────┘                    │  │  │
-│   │  │                          Top 10 candidates                              │  │  │
-│   │  │                                 │                                       │  │  │
+│   │  │                          Top 10 candidates                             │  │  │
+│   │  │                                 │                                      │  │  │
 │   │  │  Phase 3 — REFINE   "Right words in · only signal out"                 │  │  │
 │   │  │                                                                        │  │  │
 │   │  │     Query Rewriter  ─────────►  sharpen query before search            │  │  │
-│   │  │     Distiller  ──────────────►  top 3 chunks → 1 dense paragraph      │  │  │
+│   │  │     Distiller  ──────────────►  top 3 chunks → 1 dense paragraph       │  │  │
 │   │  │                                                                        │  │  │
 │   │  │  Phase 4 — REFLECT   "Write it in the notebook"                        │  │  │
 │   │  │                                                                        │  │  │
@@ -135,14 +135,14 @@ flowchart LR
 │   │  └──────────┘                                      │                      ┘  │  │
 │   │  ▲──────── loops back to Phase 2 with next step ───┘                         │  │
 │   └──────────────────────────────────────────────────────────────────────────────┘  │
-│                                          │ FINISH                                    │
-│                                          ▼                                           │
-│   ┌─────────────────────────────────────────────────────────────────────────────┐  │
-│   │  Phase 6 — SYNTHESIZE   "Sit down and write the final answer"               │  │
-│   │                                                                             │  │
-│   │  Synthesis Agent reads full RAGState  (all steps · all evidence)            │  │
-│   │  Writes cited, multi-source, comprehensive answer                           │  │
-│   └────────────────────────────────┬────────────────────────────────────────────┘  │
+│                                          │ FINISH                                   │
+│                                          ▼                                          │
+│   ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│   │  Phase 6 — SYNTHESIZE   "Sit down and write the final answer"                │  │
+│   │                                                                              │  │
+│   │  Synthesis Agent reads full RAGState  (all steps · all evidence)             │  │
+│   │  Writes cited, multi-source, comprehensive answer                            │  │
+│   └────────────────────────────────┬─────────────────────────────────────────────┘  │
 │                                    │                                                │
 │                              Final Answer ✓                                         │
 │                                                                                     │
