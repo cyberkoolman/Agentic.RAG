@@ -38,17 +38,17 @@ var agenticClient = new RagWorkflowChatClient(settings, ai, store, tavily, loade
 var oneShotClient = new RagWorkflowChatClient(settings, ai, store, tavily, loader, kbState, useOneShot: true);
 
 builder.AddAIAgent(
+    name:         "OneShot-RAG",
+    instructions: "You are a simple RAG assistant that answers questions in a single pass. " +
+                  "You retrieve relevant documents and answer directly without planning or reflection.",
+    chatClient:   oneShotClient);
+
+builder.AddAIAgent(
     name:         "Agentic-RAG",
     instructions: "You are a deep-thinking research assistant powered by an Agentic RAG pipeline. " +
                   "You decompose complex queries into multi-step plans, retrieve and reflect iteratively, " +
                   "and synthesize comprehensive answers.",
     chatClient:   agenticClient);
-
-builder.AddAIAgent(
-    name:         "OneShot-RAG",
-    instructions: "You are a simple RAG assistant that answers questions in a single pass. " +
-                  "You retrieve relevant documents and answer directly without planning or reflection.",
-    chatClient:   oneShotClient);
 
 // ─── DevUI services ───────────────────────────────────────────────────────────
 
