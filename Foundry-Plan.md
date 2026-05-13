@@ -294,10 +294,16 @@ Before starting, ensure you have:
    - **Blob content**: click in the field → switch to **Dynamic content** tab → select **Body** (from the HTTP action)
    - **Content type**: `text/html`
    - Leave all other parameters at their defaults (Infer content type: No, etc.)
-8. Click **+ New step** → search **Run indexer** → select **Run indexer (V2)** (Azure AI Search)
-   - **Connection**: select your AI Search service (`rp-search-foundry-rag`)
-   - **Indexer name**: select the indexer created by the Import Data wizard (Step 1.4)
-   - ⚠️ *Note: Configure this step after completing Step 1.4, since the indexer won't exist yet*
+8. **(Optional) Trigger the indexer immediately via HTTP action:**
+   - The AI Search indexer created in Step 1.4 runs **automatically on a schedule** (default: every 5 minutes) and will pick up new blobs on its own — so this step is optional
+   - If you want immediate indexing: Click **+ New step** → search **HTTP** → select **HTTP** action
+     - **Method**: `POST`
+     - **URI**: `https://rp-search-foundry-rag.search.windows.net/indexers/<YOUR-INDEXER-NAME>/run?api-version=2024-07-01`
+       *(Replace `<YOUR-INDEXER-NAME>` with the indexer name created in Step 1.4)*
+     - **Authentication**: select **Managed Identity** → **System-assigned**
+     - **Audience**: `https://search.azure.com`
+   - ⚠️ *Configure this step after completing Step 1.4, since the indexer won't exist yet*
+   - If you skip this, just wait ~5 minutes after the Logic App runs for the indexer to auto-pick up the new blob
 9. Click **Save**
 
 **Get the trigger URL:**
