@@ -118,36 +118,36 @@ Each current executor maps to a Foundry Prompt Agent:
 │       │ set $researchHistory = []                            │
 │       │ set $distilledContexts = []                          │
 │       │                                                      │
-│  ┌─[For Each: $plan.steps]─────────────────────────────┐     │
-│  │    │                                                │     │
-│  │  [Invoke Agent: QueryRewriter]                      │     │
-│  │    │ input: step, $researchHistory                   │     │
-│  │    │ save output as: $rewrittenQuery                 │     │
-│  │    │                                                │     │
-│  │  [If/Else: step.tool == "search_docs"]              │     │
-│  │    ├── Yes: [Invoke Agent: SearchAgent w/ AI Search] │     │
-│  │    └── No:  [Invoke Agent: SearchAgent w/ Web Search]│     │
-│  │    │ save output as: $searchResults                  │     │
-│  │    │                                                │     │
-│  │  [Invoke Agent: Distiller]                          │     │
-│  │    │ input: $searchResults                           │     │
-│  │    │ save output as: $distilledContext               │     │
-│  │    │ append to $distilledContexts                    │     │
-│  │    │                                                │     │
-│  │  [Invoke Agent: Reflection]                         │     │
-│  │    │ input: $distilledContext                        │     │
-│  │    │ save output as: $reflection                     │     │
-│  │    │ append to $researchHistory                      │     │
-│  │    │                                                │     │
-│  │  [Invoke Agent: Policy]                             │     │
-│  │    │ input: $plan, $researchHistory, $stepIndex      │     │
-│  │    │ save output as: $decision                       │     │
-│  │    │                                                │     │
-│  │  [If/Else: $decision.action == "FINISH"]            │     │
-│  │    ├── Yes: [Go To: Synthesis]                       │     │
-│  │    └── No:  $stepIndex++, [Continue loop]            │     │
-│  │                                                     │     │
-│  └─────────────────────────────────────────────────────┘     │
+│  ┌─[For Each: $plan.steps]───────────────────────────────┐   │
+│  │    │                                                  │   │
+│  │  [Invoke Agent: QueryRewriter]                        │   │
+│  │    │ input: step, $researchHistory                    │   │
+│  │    │ save output as: $rewrittenQuery                  │   │
+│  │    │                                                  │   │
+│  │  [If/Else: step.tool == "search_docs"]                │   │
+│  │    ├── Yes: [Invoke Agent: SearchAgent w/ AI Search]  │   │
+│  │    └── No:  [Invoke Agent: SearchAgent w/ Web Search] │   │
+│  │    │ save output as: $searchResults                   │   │
+│  │    │                                                  │   │
+│  │  [Invoke Agent: Distiller]                            │   │
+│  │    │ input: $searchResults                            │   │
+│  │    │ save output as: $distilledContext                │   │
+│  │    │ append to $distilledContexts                     │   │
+│  │    │                                                  │   │
+│  │  [Invoke Agent: Reflection]                           │   │
+│  │    │ input: $distilledContext                         │   │
+│  │    │ save output as: $reflection                      │   │
+│  │    │ append to $researchHistory                       │   │
+│  │    │                                                  │   │
+│  │  [Invoke Agent: Policy]                               │   │
+│  │    │ input: $plan, $researchHistory, $stepIndex       │   │
+│  │    │ save output as: $decision                        │   │
+│  │    │                                                  │   │
+│  │  [If/Else: $decision.action == "FINISH"]              │   │
+│  │    ├── Yes: [Go To: Synthesis]                        │   │
+│  │    └── No:  $stepIndex++, [Continue loop]             │   │
+│  │                                                       │   │
+│  └───────────────────────────────────────────────────────┘   │
 │                                                              │
 │  [Invoke Agent: Synthesis]                                   │
 │       │ input: $userQuery, $distilledContexts,               │
@@ -160,17 +160,17 @@ Each current executor maps to a Foundry Prompt Agent:
 ### Foundry Workflow — One-Shot Pipeline
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Foundry Workflow: "OneShot-RAG"                         │
-│                                                          │
-│  [Ask Question] ─── $userQuery                           │
-│       │                                                  │
-│  [Invoke Agent: OneShotAnswer w/ AI Search tool]         │
-│       │ AI Search returns results with semantic reranking │
-│       │ Agent generates answer with citations             │
-│       │                                                  │
-│  [Send Message] ─── final answer to user                 │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Foundry Workflow: "OneShot-RAG"                             │
+│                                                              │
+│  [Ask Question] ─── $userQuery                               │
+│       │                                                      │
+│  [Invoke Agent: OneShotAnswer w/ AI Search tool]             │
+│       │ AI Search returns results with semantic reranking    │
+│       │ Agent generates answer with citations                │
+│       │                                                      │
+│  [Send Message] ─── final answer to user                     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Implementation Order
