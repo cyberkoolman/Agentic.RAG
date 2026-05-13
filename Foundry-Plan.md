@@ -24,7 +24,7 @@ Recreate the Agentic Deep-Thinking RAG pipeline using **Microsoft Foundry servic
 | **Routing** | Conditional edges on message type | If/else nodes + for-each loops in visual builder |
 | **Auth** | API keys in `appsettings.json` | Agent Identity + Entra ID RBAC |
 | **Tools** | Custom service classes | Foundry Toolbox (single MCP endpoint) |
-| **Document ingestion** | `DocumentLoader.cs` + in-memory store | **Azure AI Search Import Data wizard** — portal-driven chunking, embedding, indexing |
+| **Document ingestion** | `DocumentLoader.cs` + in-memory store | **Logic App** (URL → Blob) + **Import Data wizard** (chunking, embedding, indexing) |
 
 ### What Lives in Foundry Portal (No Code)
 
@@ -49,9 +49,9 @@ Recreate the Agentic Deep-Thinking RAG pipeline using **Microsoft Foundry servic
 
 | Component | Why | Implementation |
 |---|---|---|
-| **None for POC** | Azure AI Search's Import Data wizard handles chunking, embedding, and indexing from the portal | N/A |
+| **None** | Logic App handles URL → Blob ingestion; Import Data wizard handles chunking/embedding/indexing | All portal-driven |
 
-> **Note:** For production scenarios with dynamic URL ingestion (user pastes URL at runtime), a lightweight ingestion script may be needed. For the POC, pre-loading documents via the portal wizard is sufficient.
+> **Note:** The Logic App (Step 1.3) bridges the gap between "user pastes a URL" and "AI Search indexes the content" — no custom code needed.
 
 ### Foundry Prompt Agents to Create
 
@@ -229,7 +229,7 @@ Before starting, ensure you have:
 5. Go to **Access control (IAM)** → **Add role assignment**:
    - Assign yourself: **Search Service Contributor** + **Search Index Data Contributor**
 
-#### Step 1.3 — Upload Documents to Blob Storage
+#### Step 1.3 — Create Storage Account and Blob Container
 
 1. Go to [Azure Portal](https://portal.azure.com) → **+ Create a resource** → **Storage account**
    - **Name**: e.g., `stfoundryrag`
@@ -239,12 +239,72 @@ Before starting, ensure you have:
 2. Click **Create**
 3. Go to the storage account → **Data storage → Containers** → **+ Container**
    - **Name**: `rag-documents`
-4. Click into the container → **Upload**
-   - Upload your source documents (PDF, HTML files, text files)
-   - Example: save the NVIDIA 10-K as a PDF and upload it
-5. Go to the storage account → **Access control (IAM)** → **Add role assignment**:
+4. Go to the storage account → **Access control (IAM)** → **Add role assignment**:
    - **Role**: `Storage Blob Data Reader`
    - **Assign to**: your AI Search service's managed identity
+
+#### Step 1.3b — Create Logic App for URL Ingestion (No Code)
+
+> **Why:** Azure AI Search has no native URL indexer. This Logic App bridges the gap — user pastes a URL, Logic App fetches the content and saves it to Blob Storage, and the AI Search indexer auto-picks it up for chunking/embedding/indexing.
+
+**Create the Logic App:**
+
+1. Go to [Azure Portal](https://portal.azure.com) → **+ Create a resource** → search **Logic App**
+2. Select **Logic App (Consumption)** — pay-per-execution, ideal for POC
+   - **Name**: e.g., `la-foundry-rag-ingest`
+   - **Region**: same as AI Search
+   - **Resource Group**: `rp-foundry-project-rg`
+3. Click **Review + Create** → **Create**
+
+**Build the workflow (visual designer):**
+
+4. Go to the Logic App → **Logic app designer**
+5. Select **"When an HTTP request is received"** trigger
+   - Click **"Use sample payload to generate schema"** and paste:
+     ```json
+     { "url": "https://example.com/document" }
+     ```
+   - This generates a schema that accepts a URL in the request body
+6. Click **+ New step** → search **HTTP** → select **HTTP** action
+   - **Method**: `GET`
+   - **URI**: click in the field → select **url** from Dynamic content (from the trigger)
+   - This fetches the web page content from the user-provided URL
+7. Click **+ New step** → search **Create blob** → select **Create blob (V2)** (Azure Blob Storage)
+   - **Connection**: select your storage account (`stfoundryrag`)
+   - **Folder path**: `/rag-documents`
+   - **Blob name**: use an expression to generate a unique name:
+     ```
+     concat(guid(), '.html')
+     ```
+   - **Blob content**: select **Body** from Dynamic content (from the HTTP action)
+8. Click **+ New step** → search **Run indexer** → select **Run indexer (V2)** (Azure AI Search)
+   - **Connection**: select your AI Search service (`rp-search-foundry-rag`)
+   - **Indexer name**: select the indexer created by the Import Data wizard (Step 1.4)
+   - ⚠️ *Note: Configure this step after completing Step 1.4, since the indexer won't exist yet*
+9. Click **Save**
+
+**Get the trigger URL:**
+
+10. Click on the **"When an HTTP request is received"** trigger → copy the **HTTP POST URL**
+    - This is the endpoint users will call to ingest a URL
+    - Example usage (from browser, Postman, or curl):
+      ```bash
+      curl -X POST "<your-logic-app-url>" \
+        -H "Content-Type: application/json" \
+        -d '{"url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581024000316/nvda-20240128.htm"}'
+      ```
+
+**How it works end-to-end:**
+
+```
+User pastes URL → Logic App trigger
+                → HTTP GET (fetches page content)
+                → Create Blob (saves to rag-documents container)
+                → Run Indexer (AI Search chunks, embeds, indexes)
+                → Content searchable in minutes ✅
+```
+
+> **Tip:** You can also add a **Response** action at the end to return a success message to the caller.
 
 #### Step 1.4 — Run the Import Data Wizard
 
