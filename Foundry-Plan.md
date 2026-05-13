@@ -314,11 +314,18 @@ Before starting, ensure you have:
 
 10. Click on the **"When an HTTP request is received"** trigger → copy the **HTTP POST URL**
     - This is the endpoint users will call to ingest a URL
-    - Example usage (from browser, Postman, or curl):
+    - Example usage:
       ```bash
+      # Bash / curl
       curl -X POST "<your-logic-app-url>" \
         -H "Content-Type: application/json" \
         -d '{"url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581024000316/nvda-20240128.htm"}'
+      ```
+      ```powershell
+      # PowerShell
+      Invoke-RestMethod -Method Post -Uri "<your-logic-app-url>" `
+        -ContentType "application/json" `
+        -Body '{"url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581024000316/nvda-20240128.htm"}'
       ```
 
 **How it works end-to-end:**
