@@ -341,26 +341,27 @@ User pastes URL → Logic App trigger
 4. Click **RAG** as the scenario
 
 **Connect to your data:**
-5. Select your subscription → storage account → `rag-documents` container
-6. Check **"Authenticate using managed identity"** → System-assigned
-7. Click **Next**
+5. Select your subscription → storage account (`stfoundryrag`) → `rag-documents` container
+6. **Blob folder**: leave **blank** (the container itself is the data source)
+7. Check **"Authenticate using managed identity"** → System-assigned
+8. Click **Next**
 
 **Vectorize your text:**
-8. Select **Azure OpenAI** or **Microsoft Foundry** as the kind
-9. Select your subscription → Foundry resource → `text-embedding-3-small` deployment
-10. Authentication: **System assigned identity**
-11. Check the billing acknowledgment
-12. Click **Next**
+9. **Kind**: select **Microsoft Foundry** (not Azure OpenAI)
+10. Select your subscription → Foundry resource → `text-embedding-3-small` deployment
+11. Authentication: **System assigned identity**
+12. Check the billing acknowledgment
+13. Click **Next**
 
 **Vectorize and enrich your images:**
-13. Skip this step (or enable if your docs have meaningful images)
-14. Click **Next**
+14. Skip this step (or enable if your docs have meaningful images)
+15. Click **Next**
 
 **Advanced settings:**
-15. ✅ **Enable semantic ranking** — this replaces the LLM-based reranker
-16. Review the auto-generated index name (e.g., `vector-XXXXXXXXX`)
-17. Rename the index to: `rp-foundry-rag-index`
-    - The wizard will also create a matching indexer — rename it to `rp-foundry-rag-indexer`
+16. ✅ **Enable semantic ranking** — this replaces the LLM-based reranker
+17. **Objects name prefix**: change from the auto-generated value to `rp-foundry-rag`
+    - This prefixes all auto-created resources (index, indexer, skillset, data source)
+    - Resulting names: `rp-foundry-rag-index`, `rp-foundry-rag-indexer`, etc.
 18. Click **Next** → **Submit**
 
 #### Step 1.5 — Verify the Index
