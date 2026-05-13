@@ -298,8 +298,7 @@ Before starting, ensure you have:
    - The AI Search indexer created in Step 1.4 runs **automatically on a schedule** (default: every 5 minutes) and will pick up new blobs on its own — so this step is optional
    - If you want immediate indexing: Click **+ New step** → search **HTTP** → select **HTTP** action
      - **Method**: `POST`
-     - **URI**: `https://rp-search-foundry-rag.search.windows.net/indexers/<YOUR-INDEXER-NAME>/run?api-version=2024-07-01`
-       *(Replace `<YOUR-INDEXER-NAME>` with the indexer name created in Step 1.4)*
+     - **URI**: `https://rp-search-foundry-rag.search.windows.net/indexers/rp-foundry-rag-indexer/run?api-version=2024-07-01`
      - **Authentication**: select **Managed Identity** → **System-assigned**
      - **Audience**: `https://search.azure.com`
    - ⚠️ *Configure this step after completing Step 1.4, since the indexer won't exist yet*
@@ -355,13 +354,14 @@ User pastes URL → Logic App trigger
 **Advanced settings:**
 15. ✅ **Enable semantic ranking** — this replaces the LLM-based reranker
 16. Review the auto-generated index name (e.g., `vector-XXXXXXXXX`)
-17. Optionally rename to something memorable: `rag-chunks`
+17. Rename the index to: `rp-foundry-rag-index`
+    - The wizard will also create a matching indexer — rename it to `rp-foundry-rag-indexer`
 18. Click **Next** → **Submit**
 
 #### Step 1.5 — Verify the Index
 
 1. Go to **Azure AI Search → Indexes** in the left menu
-2. Click on your new index (e.g., `rag-chunks`)
+2. Click on your new index (`rp-foundry-rag-index`)
 3. Note the **Document count** — should be > 0 after the indexer runs
 4. Click **Search explorer**
 5. Test a query: type `"risk factors"` and click **Search**
@@ -458,7 +458,7 @@ User pastes URL → Logic App trigger
    - **Tools**:
      - **Azure AI Search**: 
        - Connection: `rag-search-connection`
-       - Index: `rag-chunks`
+       - Index: `rp-foundry-rag-index`
        - Query type: `vector_semantic_hybrid`
        - Top K: `10`
      - **Web Search**: (add for web grounding)
@@ -568,7 +568,7 @@ User pastes URL → Logic App trigger
    - **Tools**:
      - **Azure AI Search**:
        - Connection: `rag-search-connection`
-       - Index: `rag-chunks`
+       - Index: `rp-foundry-rag-index`
        - Query type: `vector_semantic_hybrid`
        - Top K: `5`
 3. Click **Save**
@@ -591,7 +591,7 @@ User pastes URL → Logic App trigger
 4. Add tools:
    - **Azure AI Search**:
      - Connection: `rag-search-connection`
-     - Index: `rag-chunks`
+     - Index: `rp-foundry-rag-index`
      - Query type: `vector_semantic_hybrid`
      - Top K: `10`
    - **Web Search**: (no extra config needed)
@@ -1353,7 +1353,7 @@ ProjectsAgentTool aiSearchTool = ProjectsAgentTool.AsProjectTool(
     ResponseTool.CreateAzureAISearchTool(new AzureAISearchToolOptions(indexes: [
         new AzureAISearchToolIndex {
             ProjectConnectionId = aiSearchConnection.Id,
-            IndexName = "rag-chunks",
+            IndexName = "rp-foundry-rag-index",
             TopK = 10,
             QueryType = AzureAISearchQueryType.VectorSemanticHybrid
         }
@@ -1400,7 +1400,7 @@ Replace Tavily config with Toolbox config:
   "Foundry": {
     "ProjectEndpoint": "https://<resource>.ai.azure.com/api/projects/<project>",
     "SearchConnectionName": "my-search-connection",
-    "SearchIndexName": "rag-chunks",
+    "SearchIndexName": "rp-foundry-rag-index",
     "ToolboxName": "rag-tools"
   }
 }
