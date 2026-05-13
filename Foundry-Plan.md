@@ -187,6 +187,582 @@ Each current executor maps to a Foundry Prompt Agent:
 
 ---
 
+## Step-by-Step Instructions
+
+### Prerequisites
+
+Before starting, ensure you have:
+
+- [ ] An **Azure subscription** with Contributor access
+- [ ] A **Microsoft Foundry project** created at [ai.azure.com](https://ai.azure.com)
+- [ ] The following model deployments in your Foundry project:
+  - `gpt-4o` (reasoning model)
+  - `gpt-4o-mini` (fast model)
+  - `text-embedding-3-small` (embedding model)
+- [ ] A sample document for testing (e.g., [NVIDIA 2024 10-K](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=10-K))
+
+---
+
+### Phase 1 — Azure AI Search Index + Document Ingestion
+
+**Goal:** Get your source documents chunked, embedded, and indexed in Azure AI Search — all from the portal.
+
+#### Step 1.1 — Create Azure AI Search Service
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Click **+ Create a resource** → search for **"Azure AI Search"**
+3. Click **Create** and fill in:
+   - **Subscription**: your subscription
+   - **Resource group**: create new or use existing (e.g., `rg-foundry-rag`)
+   - **Service name**: e.g., `search-foundry-rag`
+   - **Location**: same region as your Foundry project
+   - **Pricing tier**: **Basic** (minimum for managed identity + semantic ranker)
+4. Click **Review + Create** → **Create**
+5. After deployment, go to the resource
+
+#### Step 1.2 — Enable RBAC and Managed Identity
+
+1. In your AI Search resource, go to **Settings → Keys**
+2. Set **API Access Control** to **"Role-based access control"** (or "Both" for transition)
+3. Go to **Settings → Identity**
+4. Under **System assigned**, toggle **Status** to **On** → click **Save**
+5. Go to **Access control (IAM)** → **Add role assignment**:
+   - Assign yourself: **Search Service Contributor** + **Search Index Data Contributor**
+
+#### Step 1.3 — Upload Documents to Blob Storage
+
+1. Go to [Azure Portal](https://portal.azure.com) → **+ Create a resource** → **Storage account**
+   - **Name**: e.g., `stfoundryrag`
+   - **Region**: same as AI Search
+   - **Performance**: Standard
+   - **Redundancy**: LRS (fine for POC)
+2. Click **Create**
+3. Go to the storage account → **Data storage → Containers** → **+ Container**
+   - **Name**: `rag-documents`
+4. Click into the container → **Upload**
+   - Upload your source documents (PDF, HTML files, text files)
+   - Example: save the NVIDIA 10-K as a PDF and upload it
+5. Go to the storage account → **Access control (IAM)** → **Add role assignment**:
+   - **Role**: `Storage Blob Data Reader`
+   - **Assign to**: your AI Search service's managed identity
+
+#### Step 1.4 — Run the Import Data Wizard
+
+1. Go to your **Azure AI Search** resource in the portal
+2. On the **Overview** page, click **Import data**
+3. Select **Azure Blob Storage** as the data source
+4. Click **RAG** as the scenario
+
+**Connect to your data:**
+5. Select your subscription → storage account → `rag-documents` container
+6. Check **"Authenticate using managed identity"** → System-assigned
+7. Click **Next**
+
+**Vectorize your text:**
+8. Select **Azure OpenAI** or **Microsoft Foundry** as the kind
+9. Select your subscription → Foundry resource → `text-embedding-3-small` deployment
+10. Authentication: **System assigned identity**
+11. Check the billing acknowledgment
+12. Click **Next**
+
+**Vectorize and enrich your images:**
+13. Skip this step (or enable if your docs have meaningful images)
+14. Click **Next**
+
+**Advanced settings:**
+15. ✅ **Enable semantic ranking** — this replaces the LLM-based reranker
+16. Review the auto-generated index name (e.g., `vector-XXXXXXXXX`)
+17. Optionally rename to something memorable: `rag-chunks`
+18. Click **Next** → **Submit**
+
+#### Step 1.5 — Verify the Index
+
+1. Go to **Azure AI Search → Indexes** in the left menu
+2. Click on your new index (e.g., `rag-chunks`)
+3. Note the **Document count** — should be > 0 after the indexer runs
+4. Click **Search explorer**
+5. Test a query: type `"risk factors"` and click **Search**
+6. Verify results contain relevant chunks from your uploaded document
+
+✅ **Phase 1 complete** — your knowledge base is indexed and searchable.
+
+---
+
+### Phase 2 — Create Foundry Prompt Agents
+
+**Goal:** Define each pipeline stage as a Foundry Prompt Agent with specific instructions and model assignments.
+
+#### Step 2.1 — Connect AI Search to Your Foundry Project
+
+1. Go to [ai.azure.com](https://ai.azure.com) → your project
+2. Go to **Management → Connected resources** (or **Settings → Connections**)
+3. Click **+ New connection** → **Azure AI Search**
+4. Select your AI Search resource (`search-foundry-rag`)
+5. Name the connection: `rag-search-connection`
+6. Authentication: **Microsoft Entra ID** (recommended) or **API Key**
+7. Click **Create**
+
+#### Step 2.2 — Create the Planner Agent
+
+1. In Foundry portal → **Build** → **Agents** → **+ New agent**
+2. Configure:
+   - **Name**: `RAG-Planner`
+   - **Model**: `gpt-4o`
+   - **Instructions**:
+     ```
+     You are a research planner. Given a user's question, decompose it into 2-5 
+     ordered sub-questions that together will fully answer the original question.
+     
+     For each step, assign a tool:
+     - "search_docs" — for questions answerable from the indexed knowledge base
+     - "search_web" — for questions requiring current/live information
+     
+     The knowledge base contains: {describe your indexed documents here, e.g., 
+     "NVIDIA's 2024 Annual Report (10-K filing) covering financials, risk factors, 
+     business operations, and market analysis."}
+     
+     Respond with JSON only:
+     {
+       "steps": [
+         {
+           "subQuestion": "What are NVIDIA's primary revenue segments?",
+           "reasoning": "Need to understand revenue breakdown before analyzing risks",
+           "tool": "search_docs"
+         }
+       ]
+     }
+     ```
+   - **Output format**: JSON Schema
+   - **Tools**: None (planning only)
+3. Click **Save**
+
+#### Step 2.3 — Create the Query Rewriter Agent
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-QueryRewriter`
+   - **Model**: `gpt-4o-mini`
+   - **Instructions**:
+     ```
+     You are a search query optimizer. Given a sub-question and any prior research 
+     findings, rewrite the sub-question into a precise, targeted search query that 
+     will retrieve the most relevant results.
+     
+     Rules:
+     - Use specific terminology that matches document language
+     - Include key entities, numbers, or section names when relevant
+     - If prior findings exist, use them to refine the query
+     - Output only the rewritten query text, nothing else
+     ```
+   - **Tools**: None
+3. Click **Save**
+
+#### Step 2.4 — Create the Search Agent (with AI Search + Web Search tools)
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-Search`
+   - **Model**: `gpt-4o-mini`
+   - **Instructions**:
+     ```
+     You are a research assistant. Search for information to answer the given 
+     question. Use the Azure AI Search tool for internal document queries and 
+     the Web Search tool for current/live information.
+     
+     Always cite your sources with URLs when available.
+     Return the most relevant passages you find.
+     ```
+   - **Tools**:
+     - **Azure AI Search**: 
+       - Connection: `rag-search-connection`
+       - Index: `rag-chunks`
+       - Query type: `vector_semantic_hybrid`
+       - Top K: `10`
+     - **Web Search**: (add for web grounding)
+3. Click **Save**
+
+#### Step 2.5 — Create the Distiller Agent
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-Distiller`
+   - **Model**: `gpt-4o-mini`
+   - **Instructions**:
+     ```
+     You are an evidence distiller. Given retrieved search results, compress them 
+     into a single dense paragraph of no more 300 words.
+     
+     Rules:
+     - Preserve exact facts, numbers, dates, and named entities
+     - Include inline citations [Source: document name]
+     - Remove redundancy across overlapping passages
+     - Focus only on information relevant to the question
+     - Output only the distilled paragraph, nothing else
+     ```
+   - **Tools**: None
+3. Click **Save**
+
+#### Step 2.6 — Create the Reflection Agent
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-Reflection`
+   - **Model**: `gpt-4o-mini`
+   - **Instructions**:
+     ```
+     You are a research note-taker. Given distilled evidence from a research step, 
+     write a single factual sentence summarizing what was learned.
+     
+     This sentence will be added to a running research history to track progress.
+     Be specific and factual. Output only the one-sentence summary.
+     ```
+   - **Tools**: None
+3. Click **Save**
+
+#### Step 2.7 — Create the Policy Agent
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-Policy`
+   - **Model**: `gpt-4o`
+   - **Instructions**:
+     ```
+     You are a research policy controller. Given:
+     - The original research plan (list of sub-questions)
+     - Completed research steps and findings so far
+     - The current step index
+     
+     Decide whether to:
+     - CONTINUE — more sub-questions remain and research is on track
+     - FINISH — enough evidence has been gathered to answer the original question,
+       OR all plan steps are exhausted
+     
+     Respond with JSON only:
+     { "action": "CONTINUE" }
+     or
+     { "action": "FINISH" }
+     ```
+   - **Output format**: JSON Schema
+   - **Tools**: None
+3. Click **Save**
+
+#### Step 2.8 — Create the Synthesis Agent
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-Synthesis`
+   - **Model**: `gpt-4o`
+   - **Instructions**:
+     ```
+     You are a research synthesizer. Given:
+     - The original user question
+     - All accumulated research evidence (distilled contexts)
+     - The research history (one-sentence summaries per step)
+     
+     Write a comprehensive, well-structured answer that:
+     - Directly addresses the original question
+     - Synthesizes information across all research steps
+     - Includes inline citations [Source: document name] or [Source: URL]
+     - Is thorough but concise — aim for 300-500 words
+     - Uses clear structure (paragraphs, bullet points where helpful)
+     ```
+   - **Tools**: None
+3. Click **Save**
+
+#### Step 2.9 — Create the One-Shot Answer Agent
+
+1. **+ New agent**
+2. Configure:
+   - **Name**: `RAG-OneShotAnswer`
+   - **Model**: `gpt-4o`
+   - **Instructions**:
+     ```
+     You are a helpful assistant. Answer the user's question using the Azure AI 
+     Search tool to find relevant information from the knowledge base.
+     
+     Always cite your sources. Provide a clear, comprehensive answer.
+     ```
+   - **Tools**:
+     - **Azure AI Search**:
+       - Connection: `rag-search-connection`
+       - Index: `rag-chunks`
+       - Query type: `vector_semantic_hybrid`
+       - Top K: `5`
+3. Click **Save**
+
+✅ **Phase 2 complete** — all 8 agents are defined.
+
+---
+
+### Phase 3 — Create Foundry Toolbox
+
+**Goal:** Bundle AI Search and Web Search into a single managed toolbox.
+
+#### Step 3.1 — Create the Toolbox
+
+1. In Foundry portal → install the **Microsoft Foundry Toolkit** VS Code extension (or use portal)
+2. Go to **Tools** → **+ Add Toolbox**
+3. Configure:
+   - **Name**: `rag-tools`
+   - **Description**: "RAG pipeline tools — AI Search + Web Search"
+4. Add tools:
+   - **Azure AI Search**:
+     - Connection: `rag-search-connection`
+     - Index: `rag-chunks`
+     - Query type: `vector_semantic_hybrid`
+     - Top K: `10`
+   - **Web Search**: (no extra config needed)
+5. Click **Publish**
+
+#### Step 3.2 — Verify the Toolbox
+
+1. Copy the toolbox **MCP endpoint URL** from the Tools view
+2. The endpoint follows this pattern:
+   ```
+   {project_endpoint}/toolboxes/rag-tools/mcp?api-version=v1
+   ```
+3. You can now attach this toolbox to any agent instead of configuring tools individually
+
+✅ **Phase 3 complete** — tools are centrally managed.
+
+---
+
+### Phase 4 — Build One-Shot Workflow
+
+**Goal:** Build the simplest pipeline first to validate that tools, agents, and workflow all work together.
+
+#### Step 4.1 — Create the Workflow
+
+1. In Foundry portal → **Build** → **Create new workflow** → **Sequential**
+2. Name it: `OneShot-RAG`
+
+#### Step 4.2 — Add Nodes
+
+Add the following nodes in order:
+
+**Node 1 — Ask Question:**
+1. Click **+** → **Ask a question**
+2. Message: `"What would you like to know?"`
+3. Save response as variable: `$userQuery`
+
+**Node 2 — Invoke One-Shot Answer Agent:**
+1. Click **+** → **Invoke agent**
+2. Select existing agent: `RAG-OneShotAnswer`
+3. Input: `$userQuery`
+4. Save output as: `$answer`
+
+**Node 3 — Send Message:**
+1. Click **+** → **Send message**
+2. Message: `$answer`
+
+#### Step 4.3 — Test the Workflow
+
+1. Click **Save**
+2. Click **Run Workflow**
+3. In the chat window, ask a question about your indexed document
+   - Example: `"What were NVIDIA's total revenues in fiscal 2024?"`
+4. Verify:
+   - The agent searches the AI Search index
+   - The response includes relevant information with citations
+   - The answer is accurate based on your source document
+
+✅ **Phase 4 complete** — One-Shot pipeline works end-to-end.
+
+---
+
+### Phase 5 — Build Deep-Thinking Workflow
+
+**Goal:** Build the full agentic pipeline with planning, looping, and policy-driven control flow.
+
+#### Step 5.1 — Create the Workflow
+
+1. In Foundry portal → **Build** → **Create new workflow** → **Sequential**
+2. Name it: `Agentic-RAG`
+
+#### Step 5.2 — Add Nodes
+
+Build the following node sequence:
+
+**Node 1 — Ask Question:**
+1. Click **+** → **Ask a question**
+2. Message: `"What would you like to research?"`
+3. Save response as: `$userQuery`
+
+**Node 2 — Invoke Planner:**
+1. Click **+** → **Invoke agent** → select `RAG-Planner`
+2. Input: `$userQuery`
+3. In **Action settings** → **Save output as** → create variable `$plan` (JSON)
+
+**Node 3 — Set Variables:**
+1. Click **+** → **Set variable**
+2. Set `$stepIndex` = `0`
+3. Add another **Set variable**: `$researchHistory` = `""`
+4. Add another **Set variable**: `$distilledContexts` = `""`
+
+**Node 4 — For Each Loop (research steps):**
+1. Click **+** → **For each**
+2. Loop over: `$plan.steps`
+3. Current item variable: `$currentStep`
+
+Inside the loop, add these nodes:
+
+**Node 4a — Invoke Query Rewriter:**
+1. Click **+** → **Invoke agent** → select `RAG-QueryRewriter`
+2. Input: `Concat("Sub-question: ", $currentStep.subQuestion, "\n\nPrior findings: ", $researchHistory)`
+3. Save output as: `$rewrittenQuery`
+
+**Node 4b — If/Else (tool routing):**
+1. Click **+** → **If/Else**
+2. Condition: `$currentStep.tool = "search_docs"`
+3. **If true** → **Invoke agent** → `RAG-Search`
+   - Input: `$rewrittenQuery`
+   - Save output as: `$searchResults`
+4. **If false** → **Invoke agent** → `RAG-Search` (same agent, but will use web search)
+   - Input: `Concat("Search the web for: ", $rewrittenQuery)`
+   - Save output as: `$searchResults`
+
+**Node 4c — Invoke Distiller:**
+1. Click **+** → **Invoke agent** → select `RAG-Distiller`
+2. Input: `Concat("Question: ", $currentStep.subQuestion, "\n\nEvidence:\n", $searchResults)`
+3. Save output as: `$distilledContext`
+
+**Node 4d — Update distilled contexts:**
+1. Click **+** → **Set variable**
+2. `$distilledContexts` = `Concat($distilledContexts, "\n\n---\nStep ", Text($stepIndex), ": ", $distilledContext)`
+
+**Node 4e — Invoke Reflection:**
+1. Click **+** → **Invoke agent** → select `RAG-Reflection`
+2. Input: `Concat("Question: ", $currentStep.subQuestion, "\n\nDistilled evidence: ", $distilledContext)`
+3. Save output as: `$reflection`
+
+**Node 4f — Update research history:**
+1. Click **+** → **Set variable**
+2. `$researchHistory` = `Concat($researchHistory, "\n- Step ", Text($stepIndex), ": ", $reflection)`
+
+**Node 4g — Invoke Policy:**
+1. Click **+** → **Invoke agent** → select `RAG-Policy`
+2. Input:
+   ```
+   Concat("Original question: ", $userQuery,
+          "\n\nResearch plan: ", $plan,
+          "\n\nCompleted research:\n", $researchHistory,
+          "\n\nCurrent step: ", Text($stepIndex), " of ", Text(CountRows($plan.steps)))
+   ```
+3. Save output as: `$decision` (JSON)
+
+**Node 4h — If/Else (continue or finish):**
+1. Click **+** → **If/Else**
+2. Condition: `$decision.action = "FINISH"`
+3. **If true** → **Go to** → `Synthesis` node (Node 5)
+4. **If false** → increment `$stepIndex`, continue loop
+
+**Node 5 — Invoke Synthesis:**
+1. Click **+** → **Invoke agent** → select `RAG-Synthesis`
+2. Input:
+   ```
+   Concat("Original question: ", $userQuery,
+          "\n\nAll research evidence:\n", $distilledContexts,
+          "\n\nResearch history:\n", $researchHistory)
+   ```
+3. Save output as: `$finalAnswer`
+
+**Node 6 — Send Message:**
+1. Click **+** → **Send message**
+2. Message: `$finalAnswer`
+
+#### Step 5.3 — Save and Test
+
+1. Click **Save**
+2. Click **Run Workflow**
+3. Ask a complex, multi-hop question:
+   - Example: `"How do NVIDIA's supply chain risks relate to their competitive position, and what are they doing to mitigate those risks?"`
+4. Verify:
+   - Planner decomposes into multiple sub-questions
+   - Each step searches and distills evidence
+   - Policy decides when to finish
+   - Synthesis produces a comprehensive, cited answer
+
+#### Step 5.4 — Toggle YAML View (Optional)
+
+1. Toggle **YAML Visualizer View** to **On**
+2. Review the generated YAML — this gives you version-controlled, exportable workflow definition
+3. Each **Save** creates a new immutable version with full history
+
+✅ **Phase 5 complete** — Deep-Thinking pipeline works end-to-end.
+
+---
+
+### Phase 6 — Agent Identity & RBAC
+
+**Goal:** Replace any API key usage with managed identity authentication.
+
+#### Step 6.1 — Verify Project Managed Identity
+
+1. In [Azure Portal](https://portal.azure.com), go to your Foundry resource
+2. Go to **Resource Management → Identity**
+3. Ensure **System-assigned managed identity** is **On**
+
+#### Step 6.2 — Assign RBAC Roles
+
+Assign the following roles to your **Foundry project's managed identity**:
+
+**On the Azure AI Search resource:**
+1. Go to AI Search → **Access control (IAM)** → **Add role assignment**
+2. Assign: `Search Index Data Reader` → to Foundry managed identity
+3. Assign: `Search Service Contributor` → to Foundry managed identity
+
+**On the Azure OpenAI / Foundry resource:**
+1. Go to Foundry resource → **Access control (IAM)** → **Add role assignment**
+2. Assign: `Azure AI User` → to Foundry managed identity
+
+**On the Storage account:**
+1. Go to Storage → **Access control (IAM)** → **Add role assignment**
+2. Assign: `Storage Blob Data Reader` → to Foundry managed identity (if not already done in Phase 1)
+
+#### Step 6.3 — Remove API Keys
+
+1. In your AI Search connections, switch authentication from **API Key** to **Microsoft Entra ID**
+2. In your Foundry agent tool configurations, verify they use managed identity
+3. Delete any stored API keys from connection settings
+
+✅ **Phase 6 complete** — zero secrets, all RBAC-based.
+
+---
+
+### Phase 7 — Memory (Optional)
+
+**Goal:** Add persistent cross-session memory for personalized experiences.
+
+#### Step 7.1 — Create Memory Store
+
+1. In Foundry portal → **Management** (or via SDK)
+2. Create a memory store:
+   - **Name**: `rag-memory`
+   - **Chat model**: `gpt-4o`
+   - **Embedding model**: `text-embedding-3-small`
+   - **Options**: Enable user profile + chat summary
+   - **User profile details**: `"Remember user's research topics, preferred document sources, and question patterns"`
+
+#### Step 7.2 — Attach to Agents
+
+1. Edit agents that should have memory (e.g., `RAG-Synthesis`, `RAG-OneShotAnswer`)
+2. Add the **Memory Search** tool:
+   - **Memory store**: `rag-memory`
+   - **Scope**: `{{$userId}}` (auto per-user isolation)
+   - **Update delay**: `300` seconds (5 min inactivity)
+
+#### Step 7.3 — Test Cross-Session Recall
+
+1. Run a query in the workflow: `"What are NVIDIA's risk factors?"`
+2. Wait for memory to be stored (~5 min)
+3. Start a **new conversation**
+4. Ask: `"Based on what I researched before, what else should I look into?"`
+5. Verify the agent recalls your prior research topic
+
+✅ **Phase 7 complete** — agents remember across sessions.
+
+---
+
 ## Feature 1 — Azure AI Search as Vector Database
 
 ### Current State
