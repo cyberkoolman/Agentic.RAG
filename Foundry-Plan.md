@@ -242,6 +242,11 @@ Before starting, ensure you have:
 4. Go to the storage account → **Access control (IAM)** → **Add role assignment**:
    - **Role**: `Storage Blob Data Reader`
    - **Assign to**: your AI Search service's managed identity
+5. **Upload the seed file** (required to bootstrap the Import Data wizard):
+   - Click into the `rag-documents` container → **Upload**
+   - Upload the [`seed.txt`](seed.txt) file from this repo
+   - This gives the wizard at least one document to configure the index schema
+   - You can delete it after the index is created
 
 #### Step 1.3b — Create Logic App for URL Ingestion (No Code)
 

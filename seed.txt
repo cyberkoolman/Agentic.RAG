@@ -1,0 +1,18 @@
+NVIDIA Corporation — Annual Report Summary (Seed Document)
+
+Item 1. Business Overview
+NVIDIA designs and sells accelerated computing platforms for AI, data centers, gaming, and automotive markets. The company's GPU architecture powers large-scale AI training and inference workloads worldwide. Key product lines include the A100, H100, and H200 data center GPUs, GeForce gaming GPUs, and the DRIVE platform for autonomous vehicles.
+
+Item 1A. Risk Factors
+Key risks include: concentration of revenue in a small number of customers, geopolitical export restrictions on advanced semiconductors, supply chain dependencies on third-party fabrication (primarily TSMC), rapid technology transitions requiring sustained R&D investment, and increasing competition from custom silicon (e.g., Google TPUs, Amazon Trainium).
+
+Item 7. Financial Highlights
+For fiscal year 2024, NVIDIA reported revenue of $60.9 billion, representing a 126% year-over-year increase driven primarily by Data Center segment growth. Data Center revenue reached $47.5 billion, up 217% from the prior year. Gross margin expanded to 72.7%. The company invested $8.7 billion in research and development.
+
+Item 8. Segment Information
+- Data Center: $47.5B revenue (78% of total) — AI training and inference platforms
+- Gaming: $10.4B revenue (17% of total) — GeForce GPUs and console processors
+- Professional Visualization: $1.6B revenue — Quadro/RTX workstation GPUs
+- Automotive: $1.1B revenue — DRIVE platform and infotainment systems
+
+This document serves as a seed for the Azure AI Search index bootstrap process.
