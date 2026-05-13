@@ -270,13 +270,30 @@ Before starting, ensure you have:
    - **URI**: click in the field → select **url** from Dynamic content (from the trigger)
    - This fetches the web page content from the user-provided URL
 7. Click **+ New step** → search **Create blob** → select **Create blob (V2)** (Azure Blob Storage)
-   - **Connection**: select your storage account (`stfoundryrag`)
-   - **Folder path**: `/rag-documents`
-   - **Blob name**: use an expression to generate a unique name:
+
+   **Create connection (first time only):**
+   - First, enable the Logic App's managed identity:
+     - Go to Logic App → **Identity** → **System assigned** → toggle **On** → **Save**
+   - Go to your storage account (`stfoundryrag`) → **Access control (IAM)** → **Add role assignment**:
+     - **Role**: `Storage Blob Data Contributor`
+     - **Assign to**: **Managed identity** → select your Logic App (`la-foundry-rag-ingest`)
+   - Wait ~1-2 minutes for role propagation
+   - Back in the designer, create the connection:
+     - **Authentication Type**: `Logic Apps Managed Identity`
+     - **Connection Name**: e.g., `stfoundryrag-connection`
+     - Click **Create**
+
+   **Fill in the action parameters:**
+   - **Storage account name or blob endpoint**: `stfoundryrag`
+   - **Folder path**: click the folder icon → navigate to `/rag-documents` (or type `/rag-documents`)
+   - **Blob name**: click in the field → switch to **Expression** tab (fx) → paste:
      ```
      concat(guid(), '.html')
      ```
-   - **Blob content**: select **Body** from Dynamic content (from the HTTP action)
+     Then click **OK** — this generates a unique filename for each ingested URL
+   - **Blob content**: click in the field → switch to **Dynamic content** tab → select **Body** (from the HTTP action)
+   - **Content type**: `text/html`
+   - Leave all other parameters at their defaults (Infer content type: No, etc.)
 8. Click **+ New step** → search **Run indexer** → select **Run indexer (V2)** (Azure AI Search)
    - **Connection**: select your AI Search service (`rp-search-foundry-rag`)
    - **Indexer name**: select the indexer created by the Import Data wizard (Step 1.4)
