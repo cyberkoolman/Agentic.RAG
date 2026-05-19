@@ -177,7 +177,7 @@ Each current executor maps to a Foundry Prompt Agent:
 |---|---|---|
 | **Phase 1** | Azure AI Search index + document ingestion | Azure Portal: Import Data wizard (Feature 1) |
 | **Phase 2** | Create Foundry Prompt Agents | Foundry Portal: define 8 agents with instructions, models, tools |
-| **Phase 3** | Create Foundry Toolbox | Foundry Portal: bundle AI Search + Web Search tools (Feature 2) |
+| **Phase 3** | Create Foundry Toolbox (optional) | Foundry Portal: bundle AI Search + Web Search tools (Feature 2) — tools already configured on agents in Phase 2 |
 | **Phase 4** | Build One-Shot Workflow | Foundry Portal: simple sequential workflow (validate tools work) |
 | **Phase 5** | Build Deep-Thinking Workflow | Foundry Portal: sequential + for-each + if/else + go-to (Feature 4) |
 | **Phase 6** | Agent Identity & RBAC | Azure Portal: replace API keys with managed identity (Feature 5) |
@@ -617,7 +617,9 @@ Before starting, ensure you have:
 
 ---
 
-### Phase 3 — Create Foundry Toolbox
+### Phase 3 — Create Foundry Toolbox (Optional)
+
+> **This phase is optional.** The Toolbox bundles AI Search + Web Search into a single MCP endpoint for centralized tool management. Since you already configured tools directly on the agents in Phase 2 (RAG-Search and RAG-OneShotAnswer), the pipeline works without a Toolbox. Revisit this later if you want centralized tool management across many agents.
 
 **Goal:** Bundle AI Search and Web Search into a single managed toolbox.
 
