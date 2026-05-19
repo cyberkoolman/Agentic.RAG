@@ -41,8 +41,7 @@ az vm create `
     --subnet $subnetName `
     --admin-username $adminUser `
     --admin-password $adminPasswordPlain `
-    --public-ip-address "" `
-    --nsg "" `
+    --location $location `
     --output table
 
 Write-Host "`n=== Step 3/4: Creating Bastion public IP ===" -ForegroundColor Cyan

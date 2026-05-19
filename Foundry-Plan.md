@@ -256,23 +256,85 @@ Before starting, ensure you have:
    - Click **Review + Create** → **Create**
    - Wait for deployment to complete (~1-2 minutes)
    - After creation, verify: go to the storage account → **Private endpoint connections** → status should show **Approved**
-   > **Note:** With private endpoints, your machine must be able to resolve the private DNS zone. If accessing from a corporate network with VPN/ExpressRoute connectivity to the VNet, it works automatically. If accessing from the portal on a non-connected network, you may need to use **Azure Cloud Shell** or a VM in the VNet to upload files.
+   > **Note:** With private endpoints, your machine must be able to resolve the private DNS zone. Your local machine and Cloud Shell cannot reach the storage account directly — you need a jumpbox VM in the VNet (see Step 1.3c below).
 
-   > **AI Search access:** Since public access is disabled, AI Search also needs network access to the storage account. Go to your **AI Search** resource → **Settings → Shared private link resources** → **+ Add** → select your storage account with sub-resource `blob`. This creates a managed private endpoint from AI Search to storage. Then go back to the **storage account → Private endpoint connections** and **Approve** the pending connection from AI Search.
-6. **Upload the seed file** (required to bootstrap the Import Data wizard):
-   - Click into the `rag-documents` container → **Upload**
-   - Upload the [`seed.txt`](seed.txt) file from this repo
-   - This gives the wizard at least one document to configure the index schema
-   - You can delete it after the index is created
-   - If portal upload fails due to network restrictions, use Azure Cloud Shell:
-     ```bash
-     az storage blob upload \
-       --account-name stfoundryrag \
-       --container-name rag-documents \
-       --file seed.txt \
-       --name seed.txt \
-       --auth-mode login
-     ```
+   > **AI Search access:** Since public access is disabled, AI Search also needs network access to the storage account. Go to your **AI Search** resource → **Settings → Shared private link resources** → **+ Add**:
+   >   - **Name**: `spl-stfoundryrag-blob`
+   >   - **Resource type**: `Microsoft.Storage/storageAccounts`
+   >   - **Resource**: select your storage account (`stfoundryrag`)
+   >   - **Sub-resource**: `blob`
+   >   - **Request message**: `"AI Search indexer access for Foundry RAG POC"`
+   >
+   > This takes ~5-10 minutes to provision. After it completes, go to the **storage account → Private endpoint connections** and **Approve** the pending connection from AI Search.
+
+#### Step 1.3c — Create Jumpbox VM for Private Endpoint Access
+
+> **Why:** Org policy disables public network access on storage accounts. Cloud Shell and local machines cannot reach the storage. A small VM in the same VNet as the private endpoint provides browser-based portal access to upload files and manage resources.
+
+**Automated:** Run the script from your local machine (requires Azure CLI logged in):
+```powershell
+.\scripts\create-jumpbox-vm.ps1
+```
+
+**Manual steps (if not using the script):**
+
+1. **Create `AzureBastionSubnet`** in your VNet:
+   ```powershell
+   az network vnet subnet create `
+       --resource-group rp-foundry-project-rg `
+       --vnet-name vnet-foundry-rag-centralus `
+       --name AzureBastionSubnet `
+       --address-prefixes "10.0.1.0/26"
+   ```
+
+2. **Create the VM** (B1s, ~$7/mo, no public IP needed but simplifies creation):
+   ```powershell
+   az vm create `
+       --resource-group rp-foundry-project-rg `
+       --name vm-foundry-rag `
+       --image "MicrosoftWindowsServer:WindowsServer:2022-datacenter-azure-edition-smalldisk:latest" `
+       --size Standard_B1s `
+       --vnet-name vnet-foundry-rag-centralus `
+       --subnet default `
+       --admin-username azureuser `
+       --admin-password "YourPasswordHere" `
+       --location centralus `
+       --output table
+   ```
+
+3. **Create Bastion** (Developer SKU, ~$0.26/hr, for browser-based RDP):
+   ```powershell
+   az network public-ip create `
+       --resource-group rp-foundry-project-rg `
+       --name pip-bastion-foundry-rag `
+       --sku Standard `
+       --location centralus
+
+   az network bastion create `
+       --resource-group rp-foundry-project-rg `
+       --name bastion-foundry-rag `
+       --public-ip-address pip-bastion-foundry-rag `
+       --vnet-name vnet-foundry-rag-centralus `
+       --sku Developer `
+       --location centralus
+   ```
+
+4. **Connect:** Azure Portal → Virtual Machines → `vm-foundry-rag` → **Connect → Bastion**
+   - Username: `azureuser`
+   - Password: the one you set
+
+5. **Deallocate when done** (stops compute charges):
+   ```powershell
+   az vm deallocate -g rp-foundry-project-rg -n vm-foundry-rag
+   az network bastion delete -g rp-foundry-project-rg -n bastion-foundry-rag --yes
+   ```
+   Or use `.\scripts\cleanup-jumpbox-vm.ps1`.
+
+6. **Upload documents** from the jumpbox VM:
+   - Open the browser on the VM → go to [portal.azure.com](https://portal.azure.com)
+   - Navigate to your storage account (`stfoundryrag`) → `rag-documents` container
+   - Upload your PDF files (e.g., `www-sec-gov-nvda-20260125.pdf` from the `data/` directory)
+   - Alternatively, install Azure CLI on the VM and run `.\scripts\upload-to-blob.ps1`
 
 #### Step 1.3b — (Optional) Create Logic App for URL Ingestion
 
