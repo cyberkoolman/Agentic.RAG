@@ -240,11 +240,39 @@ Before starting, ensure you have:
 4. Go to the storage account → **Access control (IAM)** → **Add role assignment**:
    - **Role**: `Storage Blob Data Reader`
    - **Assign to**: your AI Search service's managed identity
-5. **Upload the seed file** (required to bootstrap the Import Data wizard):
+5. **Configure Private Endpoint** (required — org policy disables public network access):
+   - Go to the storage account → **Security + networking → Networking**
+   - Confirm **Public network access** is **Disabled** (enforced by policy)
+   - Go to **Security + networking → Private endpoint connections** → **+ Private endpoint**
+     - **Name**: e.g., `pe-stfoundryrag-blob`
+     - **Region**: same as your storage account
+     - **Resource Group**: `rp-foundry-project-rg`
+   - Click **Next: Resource**
+     - **Target sub-resource**: `blob`
+   - Click **Next: Virtual Network**
+     - **Virtual network**: select (or create) a VNet in the same region
+     - **Subnet**: select a subnet (or use `default`)
+     - **Private DNS integration**: ✅ **Yes** (auto-creates `privatelink.blob.core.windows.net` DNS zone)
+   - Click **Review + Create** → **Create**
+   - Wait for deployment to complete (~1-2 minutes)
+   - After creation, verify: go to the storage account → **Private endpoint connections** → status should show **Approved**
+   > **Note:** With private endpoints, your machine must be able to resolve the private DNS zone. If accessing from a corporate network with VPN/ExpressRoute connectivity to the VNet, it works automatically. If accessing from the portal on a non-connected network, you may need to use **Azure Cloud Shell** or a VM in the VNet to upload files.
+
+   > **AI Search access:** Since public access is disabled, AI Search also needs network access to the storage account. Go to your **AI Search** resource → **Settings → Shared private link resources** → **+ Add** → select your storage account with sub-resource `blob`. This creates a managed private endpoint from AI Search to storage. Then go back to the **storage account → Private endpoint connections** and **Approve** the pending connection from AI Search.
+6. **Upload the seed file** (required to bootstrap the Import Data wizard):
    - Click into the `rag-documents` container → **Upload**
    - Upload the [`seed.txt`](seed.txt) file from this repo
    - This gives the wizard at least one document to configure the index schema
    - You can delete it after the index is created
+   - If portal upload fails due to network restrictions, use Azure Cloud Shell:
+     ```bash
+     az storage blob upload \
+       --account-name stfoundryrag \
+       --container-name rag-documents \
+       --file seed.txt \
+       --name seed.txt \
+       --auth-mode login
+     ```
 
 #### Step 1.3b — (Optional) Create Logic App for URL Ingestion
 
