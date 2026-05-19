@@ -226,6 +226,15 @@ Before starting, ensure you have:
 4. Under **System assigned**, toggle **Status** to **On** → click **Save**
 5. Go to **Access control (IAM)** → **Add role assignment**:
    - Assign yourself: **Search Service Contributor** + **Search Index Data Contributor**
+6. **Grant AI Search access to the Foundry embedding model** (required for the Import Data wizard vectorization):
+   ```powershell
+   az role assignment create `
+       --assignee-object-id (az search service show -g rp-foundry-project-rg -n rp-search-foundry-rag --query "identity.principalId" -o tsv) `
+       --assignee-principal-type ServicePrincipal `
+       --role "Cognitive Services OpenAI User" `
+       --scope (az cognitiveservices account list -g rp-foundry-project-rg --query "[0].id" -o tsv)
+   ```
+   > **Note:** This grants AI Search permission to call `text-embedding-3-small` for vectorization during indexing. Without this, the indexer will fail with `PermissionDenied`. Allow ~5 minutes for RBAC propagation before running the indexer.
 
 #### Step 1.3 — Create Storage Account and Blob Container
 
@@ -330,11 +339,23 @@ Before starting, ensure you have:
    ```
    Or use `.\scripts\cleanup-jumpbox-vm.ps1`.
 
-6. **Upload documents** from the jumpbox VM:
-   - Open the browser on the VM → go to [portal.azure.com](https://portal.azure.com)
-   - Navigate to your storage account (`stfoundryrag`) → `rag-documents` container
-   - Upload your PDF files (e.g., `www-sec-gov-nvda-20260125.pdf` from the `data/` directory)
-   - Alternatively, install Azure CLI on the VM and run `.\scripts\upload-to-blob.ps1`
+6. **Upload documents** via `az vm run-command` (no Bastion needed):
+   - Give the VM a managed identity with storage access:
+     ```powershell
+     az vm identity assign -g rp-foundry-project-rg -n vm-foundry-rag
+
+     az role assignment create `
+         --assignee-object-id (az vm show -g rp-foundry-project-rg -n vm-foundry-rag --query "identity.principalId" -o tsv) `
+         --assignee-principal-type ServicePrincipal `
+         --role "Storage Blob Data Contributor" `
+         --scope (az storage account show -n stfoundryrag --query "id" -o tsv)
+     ```
+   - Run the upload script remotely (repo must be public, or use a direct URL):
+     ```powershell
+     az vm run-command invoke -g rp-foundry-project-rg -n vm-foundry-rag `
+         --command-id RunPowerShellScript --scripts @scripts\remote-upload-to-blob.ps1
+     ```
+   - Alternatively, connect via Bastion and upload through the portal browser
 
 #### Step 1.3b — (Optional) Create Logic App for URL Ingestion
 
@@ -370,13 +391,17 @@ Before starting, ensure you have:
 16. ✅ **Enable semantic ranking** — this replaces the LLM-based reranker
 17. **Objects name prefix**: change from the auto-generated value to `rp-foundry-rag`
     - This prefixes all auto-created resources (index, indexer, skillset, data source)
-    - Resulting names: `rp-foundry-rag-index`, `rp-foundry-rag-indexer`, etc.
+    - Resulting names: `rp-foundry-rag` (index), `rp-foundry-rag-indexer`, etc.
 18. Click **Next** → **Submit**
+
+> **Troubleshooting:** If the indexer fails with `PermissionDenied` on the embedding skill, ensure the RBAC role from Step 1.2 has propagated (~5 minutes). Re-run the indexer from **Indexers → `rp-foundry-rag-indexer` → Run** — no need to reset.
+>
+> **To reset and start over:** Run `.\scripts\reset-search.ps1` to delete all search resources, then re-run the Import Data wizard. RBAC role assignments are not affected by the reset.
 
 #### Step 1.5 — Verify the Index
 
 1. Go to **Azure AI Search → Indexes** in the left menu
-2. Click on your new index (`rp-foundry-rag-index`)
+2. Click on your new index (`rp-foundry-rag`)
 3. Note the **Document count** — should be > 0 after the indexer runs
 4. Click **Search explorer**
 5. Test a query: type `"risk factors"` and click **Search**
@@ -473,7 +498,7 @@ Before starting, ensure you have:
    - **Tools**:
      - **Azure AI Search**: 
        - Connection: `rag-search-connection`
-       - Index: `rp-foundry-rag-index`
+       - Index: `rp-foundry-rag`
        - Query type: `vector_semantic_hybrid`
        - Top K: `10`
      - **Web Search**: (add for web grounding)
@@ -583,7 +608,7 @@ Before starting, ensure you have:
    - **Tools**:
      - **Azure AI Search**:
        - Connection: `rag-search-connection`
-       - Index: `rp-foundry-rag-index`
+       - Index: `rp-foundry-rag`
        - Query type: `vector_semantic_hybrid`
        - Top K: `5`
 3. Click **Save**
@@ -606,7 +631,7 @@ Before starting, ensure you have:
 4. Add tools:
    - **Azure AI Search**:
      - Connection: `rag-search-connection`
-     - Index: `rp-foundry-rag-index`
+     - Index: `rp-foundry-rag`
      - Query type: `vector_semantic_hybrid`
      - Top K: `10`
    - **Web Search**: (no extra config needed)
@@ -1368,7 +1393,7 @@ ProjectsAgentTool aiSearchTool = ProjectsAgentTool.AsProjectTool(
     ResponseTool.CreateAzureAISearchTool(new AzureAISearchToolOptions(indexes: [
         new AzureAISearchToolIndex {
             ProjectConnectionId = aiSearchConnection.Id,
-            IndexName = "rp-foundry-rag-index",
+            IndexName = "rp-foundry-rag",
             TopK = 10,
             QueryType = AzureAISearchQueryType.VectorSemanticHybrid
         }
@@ -1415,7 +1440,7 @@ Replace Tavily config with Toolbox config:
   "Foundry": {
     "ProjectEndpoint": "https://<resource>.ai.azure.com/api/projects/<project>",
     "SearchConnectionName": "my-search-connection",
-    "SearchIndexName": "rp-foundry-rag-index",
+    "SearchIndexName": "rp-foundry-rag",
     "ToolboxName": "rag-tools"
   }
 }
