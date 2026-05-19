@@ -248,15 +248,9 @@ Before starting, ensure you have:
 
 #### Step 1.3b — (Optional) Create Logic App for URL Ingestion
 
-> **This step is entirely optional.** It is not a Foundry feature and is not required to understand the Foundry agent workflow. It solves a separate problem — automating URL-to-Blob ingestion — using Azure Logic Apps. For the POC, manually uploading documents to Blob Storage (Step 1.3) is sufficient.
+> **This step is entirely optional.** It is not a Foundry feature and is not required to understand the Foundry agent workflow. For the POC, manually uploading documents to Blob Storage (Step 1.3) is sufficient.
 >
-> If you want to set this up later, the Logic App pattern is:
-> 1. Create a **Logic App (Consumption)** with an HTTP trigger accepting `{ "url": "..." }`
-> 2. Add an **HTTP GET** action to fetch the page content from the URL
-> 3. Add a **Create Blob** action to save the content to the `rag-documents` container
-> 4. Optionally trigger the AI Search indexer via HTTP POST
->
-> This lets users paste a URL and have it automatically chunked, embedded, and indexed — but it's outside the scope of learning Foundry.
+> See **[Logic-App-Optional.md](Logic-App-Optional.md)** for full step-by-step instructions if you want to set this up later.
 
 #### Step 1.4 — Run the Import Data Wizard
 
