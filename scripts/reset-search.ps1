@@ -11,7 +11,7 @@ $prefix        = "rp-foundry-rag"
 $apiVersion    = "2024-07-01"
 $baseUrl       = "https://$searchService.search.windows.net"
 
-$indexName      = "$prefix-index"
+$indexName      = "$prefix"
 $indexerName    = "$prefix-indexer"
 $skillsetName   = "$prefix-skillset"
 $datasourceName = "$prefix-datasource"
