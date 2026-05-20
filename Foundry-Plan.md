@@ -703,92 +703,98 @@ The minimal working workflow is just **two nodes**: `Start → RAG-OneShotAnswer
 
 Build the following node sequence. As verified in Phase 4, **do not add an `Ask a question` node** — the `Start` trigger already forwards the user's message to the first action. Also set `autoSend: false` on all intermediate agent nodes so only the final Synthesis reply is sent to the chat.
 
+> **Variable naming convention:** In the Foundry portal, all workflow variables live under the `Local.*` namespace and must be plain identifiers — **do not use a `$` prefix** (e.g., use `Local.userQuery`, not `Local.$userQuery` or `$userQuery`). When referencing a variable in an expression, use `=Local.userQuery`.
+
 **Node 1 — Capture user query (Set Variable):**
 1. From `Start`, click **+** → **Set variable**
-2. Variable: `$userQuery`
+2. Variable: `Local.userQuery`
 3. Value: `=System.LastMessage.Text`
    > This captures the original question so it can be referenced later by the Policy and Synthesis agents.
 
 **Node 2 — Invoke Planner:**
 1. Click **+** → **Invoke agent** → select `RAG-Planner`
-2. Input: `$userQuery`
-3. **Save output as**: `$plan` (JSON)
+2. Input → messages: `=Local.userQuery`
+3. **Save output as**: `Local.plan` (JSON)
 4. **Auto-send**: **Off** (intermediate result, not for user)
 
 **Node 3 — Initialize loop state (Set Variable, repeated):**
-1. `$stepIndex` = `0`
-2. `$researchHistory` = `""`
-3. `$distilledContexts` = `""`
+1. `Local.stepIndex` = `0`
+2. `Local.researchHistory` = `""`
+3. `Local.distilledContexts` = `""`
 
 **Node 4 — For Each Loop (research steps):**
 1. Click **+** → **For each**
-2. Loop over: `$plan.steps`
-3. Current item variable: `$currentStep`
+2. Loop over: `=Local.plan.steps`
+3. Current item variable: `Local.currentStep`
 
 Inside the loop, add these nodes (all with **Auto-send: Off**):
 
 **Node 4a — Invoke Query Rewriter:**
 1. Click **+** → **Invoke agent** → select `RAG-QueryRewriter`
-2. Input: `Concat("Sub-question: ", $currentStep.subQuestion, "\n\nPrior findings: ", $researchHistory)`
-3. Save output as: `$rewrittenQuery`
+2. Input → messages: `=Concat("Sub-question: ", Local.currentStep.subQuestion, "\n\nPrior findings: ", Local.researchHistory)`
+3. Save output as: `Local.rewrittenQuery`
 
 **Node 4b — If/Else (tool routing):**
 1. Click **+** → **If/Else**
-2. Condition: `$currentStep.tool = "search_docs"`
+2. Condition: `=Local.currentStep.tool = "search_docs"`
 3. **If true** → **Invoke agent** → `RAG-Search`
-   - Input: `$rewrittenQuery`
-   - Save output as: `$searchResults`
+   - Input → messages: `=Local.rewrittenQuery`
+   - Save output as: `Local.searchResults`
 4. **If false** → **Invoke agent** → `RAG-Search` (same agent, but will use web search)
-   - Input: `Concat("Search the web for: ", $rewrittenQuery)`
-   - Save output as: `$searchResults`
+   - Input → messages: `=Concat("Search the web for: ", Local.rewrittenQuery)`
+   - Save output as: `Local.searchResults`
 
 **Node 4c — Invoke Distiller:**
 1. Click **+** → **Invoke agent** → select `RAG-Distiller`
-2. Input: `Concat("Question: ", $currentStep.subQuestion, "\n\nEvidence:\n", $searchResults)`
-3. Save output as: `$distilledContext`
+2. Input → messages: `=Concat("Question: ", Local.currentStep.subQuestion, "\n\nEvidence:\n", Local.searchResults)`
+3. Save output as: `Local.distilledContext`
 
 **Node 4d — Update distilled contexts:**
 1. Click **+** → **Set variable**
-2. `$distilledContexts` = `Concat($distilledContexts, "\n\n---\nStep ", Text($stepIndex), ": ", $distilledContext)`
+2. Variable: `Local.distilledContexts`
+3. Value: `=Concat(Local.distilledContexts, "\n\n---\nStep ", Text(Local.stepIndex), ": ", Local.distilledContext)`
 
 **Node 4e — Invoke Reflection:**
 1. Click **+** → **Invoke agent** → select `RAG-Reflection`
-2. Input: `Concat("Question: ", $currentStep.subQuestion, "\n\nDistilled evidence: ", $distilledContext)`
-3. Save output as: `$reflection`
+2. Input → messages: `=Concat("Question: ", Local.currentStep.subQuestion, "\n\nDistilled evidence: ", Local.distilledContext)`
+3. Save output as: `Local.reflection`
 
 **Node 4f — Update research history:**
 1. Click **+** → **Set variable**
-2. `$researchHistory` = `Concat($researchHistory, "\n- Step ", Text($stepIndex), ": ", $reflection)`
+2. Variable: `Local.researchHistory`
+3. Value: `=Concat(Local.researchHistory, "\n- Step ", Text(Local.stepIndex), ": ", Local.reflection)`
 
 **Node 4g — Invoke Policy:**
 1. Click **+** → **Invoke agent** → select `RAG-Policy`
-2. Input:
+2. Input → messages:
    ```
-   Concat("Original question: ", $userQuery,
-          "\n\nResearch plan: ", $plan,
-          "\n\nCompleted research:\n", $researchHistory,
-          "\n\nCurrent step: ", Text($stepIndex), " of ", Text(CountRows($plan.steps)))
+   =Concat("Original question: ", Local.userQuery,
+           "\n\nResearch plan: ", Local.plan,
+           "\n\nCompleted research:\n", Local.researchHistory,
+           "\n\nCurrent step: ", Text(Local.stepIndex), " of ", Text(CountRows(Local.plan.steps)))
    ```
-3. Save output as: `$decision` (JSON)
+3. Save output as: `Local.decision` (JSON)
 
 **Node 4h — If/Else (continue or finish):**
 1. Click **+** → **If/Else**
-2. Condition: `$decision.action = "FINISH"`
+2. Condition: `=Local.decision.action = "FINISH"`
 3. **If true** → **Break loop** (exit the For Each)
-4. **If false** → increment `$stepIndex`, continue loop
+4. **If false** → **Set variable** `Local.stepIndex` = `=Local.stepIndex + 1` and continue loop
 
 **Node 5 — Invoke Synthesis (final answer — Auto-send: On):**
 1. Click **+** → **Invoke agent** → select `RAG-Synthesis`
-2. Input:
+2. Input → messages:
    ```
-   Concat("Original question: ", $userQuery,
-          "\n\nAll research evidence:\n", $distilledContexts,
-          "\n\nResearch history:\n", $researchHistory)
+   =Concat("Original question: ", Local.userQuery,
+           "\n\nAll research evidence:\n", Local.distilledContexts,
+           "\n\nResearch history:\n", Local.researchHistory)
    ```
 3. **Auto-send**: **On** — this is the only response the user should see.
 
 > **Why this differs from the earlier draft:**
-> - The `Ask a question` node was removed; the user message arrives via the `Start` trigger and is captured into `$userQuery` with `=System.LastMessage.Text`.
+> - The `Ask a question` node was removed; the user message arrives via the `Start` trigger and is captured into `Local.userQuery` with `=System.LastMessage.Text`.
+> - All variables use the `Local.*` namespace without a `$` prefix. Variable names must be plain identifiers — `Local.$userQuery` will fail the workflow validator.
+> - Expressions referencing variables must be prefixed with `=` (e.g., `=Local.userQuery`); without it, the value is treated as a literal string.
 > - The trailing `Send Message` node was removed; `RAG-Synthesis` with `Auto-send: On` delivers the final answer.
 > - All intermediate agent invocations use `Auto-send: Off` so the user doesn't see planner/search/distiller traffic in the chat.
 
