@@ -701,30 +701,31 @@ The minimal working workflow is just **two nodes**: `Start → RAG-OneShotAnswer
 
 #### Step 5.2 — Add Nodes
 
-Build the following node sequence:
+Build the following node sequence. As verified in Phase 4, **do not add an `Ask a question` node** — the `Start` trigger already forwards the user's message to the first action. Also set `autoSend: false` on all intermediate agent nodes so only the final Synthesis reply is sent to the chat.
 
-**Node 1 — Ask Question:**
-1. Click **+** → **Ask a question**
-2. Message: `"What would you like to research?"`
-3. Save response as: `$userQuery`
+**Node 1 — Capture user query (Set Variable):**
+1. From `Start`, click **+** → **Set variable**
+2. Variable: `$userQuery`
+3. Value: `=System.LastMessage.Text`
+   > This captures the original question so it can be referenced later by the Policy and Synthesis agents.
 
 **Node 2 — Invoke Planner:**
 1. Click **+** → **Invoke agent** → select `RAG-Planner`
 2. Input: `$userQuery`
-3. In **Action settings** → **Save output as** → create variable `$plan` (JSON)
+3. **Save output as**: `$plan` (JSON)
+4. **Auto-send**: **Off** (intermediate result, not for user)
 
-**Node 3 — Set Variables:**
-1. Click **+** → **Set variable**
-2. Set `$stepIndex` = `0`
-3. Add another **Set variable**: `$researchHistory` = `""`
-4. Add another **Set variable**: `$distilledContexts` = `""`
+**Node 3 — Initialize loop state (Set Variable, repeated):**
+1. `$stepIndex` = `0`
+2. `$researchHistory` = `""`
+3. `$distilledContexts` = `""`
 
 **Node 4 — For Each Loop (research steps):**
 1. Click **+** → **For each**
 2. Loop over: `$plan.steps`
 3. Current item variable: `$currentStep`
 
-Inside the loop, add these nodes:
+Inside the loop, add these nodes (all with **Auto-send: Off**):
 
 **Node 4a — Invoke Query Rewriter:**
 1. Click **+** → **Invoke agent** → select `RAG-QueryRewriter`
@@ -773,10 +774,10 @@ Inside the loop, add these nodes:
 **Node 4h — If/Else (continue or finish):**
 1. Click **+** → **If/Else**
 2. Condition: `$decision.action = "FINISH"`
-3. **If true** → **Go to** → `Synthesis` node (Node 5)
+3. **If true** → **Break loop** (exit the For Each)
 4. **If false** → increment `$stepIndex`, continue loop
 
-**Node 5 — Invoke Synthesis:**
+**Node 5 — Invoke Synthesis (final answer — Auto-send: On):**
 1. Click **+** → **Invoke agent** → select `RAG-Synthesis`
 2. Input:
    ```
@@ -784,11 +785,12 @@ Inside the loop, add these nodes:
           "\n\nAll research evidence:\n", $distilledContexts,
           "\n\nResearch history:\n", $researchHistory)
    ```
-3. Save output as: `$finalAnswer`
+3. **Auto-send**: **On** — this is the only response the user should see.
 
-**Node 6 — Send Message:**
-1. Click **+** → **Send message**
-2. Message: `$finalAnswer`
+> **Why this differs from the earlier draft:**
+> - The `Ask a question` node was removed; the user message arrives via the `Start` trigger and is captured into `$userQuery` with `=System.LastMessage.Text`.
+> - The trailing `Send Message` node was removed; `RAG-Synthesis` with `Auto-send: On` delivers the final answer.
+> - All intermediate agent invocations use `Auto-send: Off` so the user doesn't see planner/search/distiller traffic in the chat.
 
 #### Step 5.3 — Save and Test
 
