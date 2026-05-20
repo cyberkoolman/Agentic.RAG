@@ -663,22 +663,17 @@ Before starting, ensure you have:
 
 #### Step 4.2 — Add Nodes
 
-Add the following nodes in order:
+The minimal working workflow is just **two nodes**: `Start → RAG-OneShotAnswer`. The `Start` node already forwards the user's incoming message to the next node, and the agent's response is auto-sent back to the user. **Do not add a `Question` ("Ask a question") node** — it causes the workflow to prompt again instead of forwarding the original user message, leaving the workflow stuck waiting for input.
 
-**Node 1 — Ask Question:**
-1. Click **+** → **Ask a question**
-2. Message: `"What would you like to know?"`
-3. Save response as variable: `$userQuery`
-
-**Node 2 — Invoke One-Shot Answer Agent:**
-1. Click **+** → **Invoke agent**
+**Node 1 — Invoke One-Shot Answer Agent:**
+1. From the `Start` node, click **+** → **Invoke agent**
 2. Select existing agent: `RAG-OneShotAnswer`
-3. Input: `$userQuery`
-4. Save output as: `$answer`
+3. Leave inputs/outputs at defaults — the agent receives the conversation message automatically and its reply is auto-sent to the user
 
-**Node 3 — Send Message:**
-1. Click **+** → **Send message**
-2. Message: `$answer`
+> **Why no Question or Send Message node:**
+> - The `Start` (OnConversationStart) trigger already provides the user message to the next action.
+> - `InvokeAzureAgent` auto-sends the agent reply to the chat by default.
+> - Adding a `Question` node on top creates a second prompt that blocks the flow.
 
 #### Step 4.3 — Test the Workflow
 
