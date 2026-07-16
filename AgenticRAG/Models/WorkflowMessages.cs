@@ -60,3 +60,9 @@ public record PolicySignal(int CompletedStepIndex);
 /// This is the FINISH branch of the conditional split.
 /// </summary>
 public record FinishSignal();
+
+/// <summary>
+/// Final workflow output carrying the answer text and cumulative token usage.
+/// Yielded by SynthesisExecutor and OneShotAnswerExecutor.
+/// </summary>
+public record AnswerResult(string Text, int InputTokens, int OutputTokens, int TotalTokens);

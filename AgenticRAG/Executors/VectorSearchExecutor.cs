@@ -87,7 +87,7 @@ public sealed class VectorSearchExecutor : Executor<SearchRequest>
             Respond with exactly one word: vector, keyword, or hybrid.
             """;
 
-        var response = await _ai.CompleteAsync(SystemPrompt, $"Query: {query}", useReasoningModel: false, ct);
+        var response = (await _ai.CompleteAsync(SystemPrompt, $"Query: {query}", useReasoningModel: false, ct)).Text;
 
         return response.Trim().ToLowerInvariant() switch
         {

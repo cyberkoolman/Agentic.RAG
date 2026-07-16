@@ -141,9 +141,9 @@ string? finalAnswer = null;
 
 await foreach (var evt in run.WatchStreamAsync())
 {
-    if (evt is WorkflowOutputEvent outputEvent)
+    if (evt is WorkflowOutputEvent outputEvent && outputEvent.Data is AnswerResult ar)
     {
-        finalAnswer = outputEvent.Data as string;
+        finalAnswer = ar.Text;
         break;
     }
 }

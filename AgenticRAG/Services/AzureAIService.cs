@@ -46,13 +46,13 @@ public class AzureAIService
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Sends a single system + user message pair and returns the assistant's text.
+    /// Sends a single system + user message pair and returns the assistant's text with token usage.
     /// </summary>
     /// <param name="useReasoningModel">
     /// True → use the high-capability reasoning model (planning, policy, synthesis).
     /// False → use the faster model (rewriting, reranking, distillation, reflection).
     /// </param>
-    public async Task<string> CompleteAsync(
+    public async Task<CompletionResult> CompleteAsync(
         string systemPrompt,
         string userMessage,
         bool useReasoningModel = false,
@@ -68,7 +68,14 @@ public class AzureAIService
         };
 
         var response = await chatClient.CompleteChatAsync(messages, cancellationToken: cancellationToken);
-        return response.Value.Content[0].Text;
+        var text = response.Value.Content[0].Text;
+        var usage = response.Value.Usage;
+
+        return new CompletionResult(
+            text,
+            usage?.InputTokenCount ?? 0,
+            usage?.OutputTokenCount ?? 0,
+            usage?.TotalTokenCount ?? 0);
     }
 
     /// <summary>
@@ -84,13 +91,13 @@ public class AzureAIService
         const string jsonSuffix =
             "\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no explanations — just the JSON object.";
 
-        var raw = await CompleteAsync(
+        var result = await CompleteAsync(
             systemPrompt + jsonSuffix,
             userMessage,
             useReasoningModel,
             cancellationToken);
 
-        var json = StripMarkdownFences(raw);
+        var json = StripMarkdownFences(result.Text);
 
         try
         {
@@ -174,3 +181,6 @@ public class AzureAIService
         return withoutOpen.Trim();
     }
 }
+
+/// <summary>Chat completion result with token usage from the LLM.</summary>
+public record CompletionResult(string Text, int InputTokens, int OutputTokens, int TotalTokens);

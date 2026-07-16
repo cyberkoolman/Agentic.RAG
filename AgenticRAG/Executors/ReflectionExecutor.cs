@@ -42,13 +42,13 @@ public sealed class ReflectionExecutor : Executor<DistilledContext>
             The sentence will be added to a research log read by a policy agent.
             """;
 
-        var summary = await _ai.CompleteAsync(
+        var summary = (await _ai.CompleteAsync(
             SystemPrompt,
             $"Original query  : {state.UserQuery}\n" +
             $"Sub-question    : {message.SubQuestion}\n" +
             $"Retrieved context:\n{message.Context}",
             useReasoningModel: false,
-            cancellationToken);
+            cancellationToken)).Text;
 
         summary = summary.Trim().TrimEnd('.');
 

@@ -58,11 +58,11 @@ public sealed class DistillerExecutor : Executor<RankedResults>
             - Keep the distilled paragraph under 300 words.
             """;
 
-        var distilled = await _ai.CompleteAsync(
+        var distilled = (await _ai.CompleteAsync(
             SystemPrompt,
             $"Question: {message.SubQuestion}\n\nDocuments:\n{docs}\n\nDistilled context:",
             useReasoningModel: false,
-            cancellationToken);
+            cancellationToken)).Text;
 
         distilled = distilled.Trim();
         Console.WriteLine($"  Distilled to {distilled.Length} characters.");

@@ -92,11 +92,11 @@ public sealed class QueryRewriterExecutor : Executor<StepSignal>
                 Return ONLY the rewritten query string — no explanation, no punctuation wrappers.
                 """;
 
-            rewritten = await _ai.CompleteAsync(
+            rewritten = (await _ai.CompleteAsync(
                 SystemPrompt,
                 $"Sub-question : {step.SubQuestion}\nTool         : {step.Tool}{historyContext}\n\nRewritten query:",
                 useReasoningModel: false,
-                cancellationToken);
+                cancellationToken)).Text;
 
             rewritten = rewritten.Trim().Trim('"').Trim('\'');
             Console.WriteLine($"  Rewritten    : {rewritten}");

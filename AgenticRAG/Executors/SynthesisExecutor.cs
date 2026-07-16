@@ -14,7 +14,7 @@ namespace AgenticRAG.Executors;
 /// This is the only node that calls context.YieldOutputAsync — it terminates the
 /// workflow and delivers the final result to the caller in Program.cs.
 /// </summary>
-[YieldsOutput(typeof(string))]
+[YieldsOutput(typeof(AnswerResult))]
 public sealed class SynthesisExecutor : Executor<FinishSignal>
 {
     private readonly AzureAIService _ai;
@@ -60,7 +60,7 @@ public sealed class SynthesisExecutor : Executor<FinishSignal>
             7. Acknowledge where information is limited or uncertain.
             """;
 
-        var finalAnswer = await _ai.CompleteAsync(
+        var result = await _ai.CompleteAsync(
             SystemPrompt,
             $"Original query:\n{state.UserQuery}\n\n" +
             $"Research summary:\n{historySummary}\n\n" +
@@ -73,10 +73,13 @@ public sealed class SynthesisExecutor : Executor<FinishSignal>
         Console.WriteLine("\n" + new string('═', 80));
         Console.WriteLine("FINAL ANSWER");
         Console.WriteLine(new string('═', 80));
-        Console.WriteLine(finalAnswer);
+        Console.WriteLine(result.Text);
         Console.WriteLine(new string('═', 80));
+        Console.WriteLine($"  Tokens — input: {result.InputTokens}, output: {result.OutputTokens}, total: {result.TotalTokens}");
 
         // Yield to the workflow caller (Program.cs)
-        await context.YieldOutputAsync(finalAnswer, cancellationToken);
+        await context.YieldOutputAsync(
+            new AnswerResult(result.Text, result.InputTokens, result.OutputTokens, result.TotalTokens),
+            cancellationToken);
     }
 }

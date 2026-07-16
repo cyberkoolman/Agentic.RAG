@@ -81,11 +81,55 @@ public sealed class RagWorkflowChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var chunks = new List<string>();
-        await foreach (var update in GetStreamingResponseAsync(chatMessages, options, cancellationToken))
-            if (update.Text is { } t) chunks.Add(t);
+        var userText = chatMessages
+            .LastOrDefault(m => m.Role == ChatRole.User)?.Text?.Trim() ?? "";
 
-        return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Concat(chunks)));
+        var url = ExtractUrl(userText);
+        if (url is not null)
+        {
+            var chunks = new List<string>();
+            await foreach (var update in LoadSourceAsync(url, cancellationToken))
+                if (update.Text is { } t) chunks.Add(t);
+            return new ChatResponse([new ChatMessage(ChatRole.Assistant, string.Concat(chunks))]);
+        }
+
+        if (!_kbState.HasSource)
+        {
+            return new ChatResponse([new ChatMessage(ChatRole.Assistant,
+                "I'm ready! Please share a URL (or paste a file path) to load your " +
+                "knowledge source, and I'll index it. Then ask me anything.")]);
+        }
+
+        // Run the pipeline and extract AnswerResult for usage
+        var pipelineLabel = _useOneShot ? "One-Shot" : "Deep-Thinking";
+        Console.WriteLine($"\n[RAG] Query ({pipelineLabel}): {userText}");
+
+        AnswerResult? answerResult = null;
+        await using var run = await InProcessExecution.RunStreamingAsync(_workflow, userText);
+
+        await foreach (var evt in run.WatchStreamAsync())
+        {
+            if (evt is WorkflowOutputEvent outputEvent && outputEvent.Data is AnswerResult ar)
+            {
+                answerResult = ar;
+                break;
+            }
+        }
+
+        var answer = answerResult?.Text ?? "The research pipeline did not produce an answer.";
+        var response = new ChatResponse([new ChatMessage(ChatRole.Assistant, answer)]);
+
+        if (answerResult is not null && answerResult.TotalTokens > 0)
+        {
+            response.Usage = new UsageDetails
+            {
+                InputTokenCount = answerResult.InputTokens,
+                OutputTokenCount = answerResult.OutputTokens,
+                TotalTokenCount = answerResult.TotalTokens
+            };
+        }
+
+        return response;
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -112,8 +156,26 @@ public sealed class RagWorkflowChatClient : IChatClient
             yield break;
         }
 
-        await foreach (var u in RunPipelineAsync(userText, ct))
-            yield return u;
+        var response = await GetResponseAsync(chatMessages, options, ct);
+        var answer = response.Text ?? "";
+
+        var sentences = answer.Split([". ", ".\n"], StringSplitOptions.None);
+        for (int i = 0; i < sentences.Length; i++)
+        {
+            var chunk = i < sentences.Length - 1 ? sentences[i] + ". " : sentences[i];
+            if (string.IsNullOrWhiteSpace(chunk)) continue;
+
+            var update = new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new TextContent(chunk)] };
+
+            // Include usage on the last chunk
+            if (i == sentences.Length - 1 && response.Usage is not null)
+            {
+                update.Contents.Add(new UsageContent(response.Usage));
+            }
+
+            yield return update;
+            await Task.Delay(25, ct);
+        }
     }
 
     public object? GetService(Type serviceType, object? key = null) => null;
@@ -155,39 +217,6 @@ public sealed class RagWorkflowChatClient : IChatClient
         finally
         {
             _lock.Release();
-        }
-    }
-
-    // ── Pipeline execution ─────────────────────────────────────────────────
-
-    private async IAsyncEnumerable<ChatResponseUpdate> RunPipelineAsync(
-        string query,
-        [EnumeratorCancellation] CancellationToken ct)
-    {
-        var pipelineLabel = _useOneShot ? "One-Shot" : "Deep-Thinking";
-        Console.WriteLine($"\n[RAG] Query ({pipelineLabel}): {query}");
-
-        string? answer = null;
-        await using var run = await InProcessExecution.RunStreamingAsync(_workflow, query);
-
-        await foreach (var evt in run.WatchStreamAsync())
-        {
-            if (evt is WorkflowOutputEvent outputEvent)
-            {
-                answer = outputEvent.Data as string;
-                break;
-            }
-        }
-
-        answer ??= "The research pipeline did not produce an answer.";
-
-        var sentences = answer.Split([". ", ".\n"], StringSplitOptions.None);
-        for (int i = 0; i < sentences.Length; i++)
-        {
-            var chunk = i < sentences.Length - 1 ? sentences[i] + ". " : sentences[i];
-            if (string.IsNullOrWhiteSpace(chunk)) continue;
-            yield return new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new TextContent(chunk)] };
-            await Task.Delay(25, ct);
         }
     }
 

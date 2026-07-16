@@ -16,7 +16,7 @@ namespace AgenticRAG.Executors;
 /// This intentionally naive approach highlights the quality gap that planning,
 /// reflection, and iterative retrieval provide in the deep-thinking pipeline.
 /// </summary>
-[YieldsOutput(typeof(string))]
+[YieldsOutput(typeof(AnswerResult))]
 public sealed class OneShotAnswerExecutor : Executor<RankedResults>
 {
     private readonly AzureAIService _ai;
@@ -36,7 +36,7 @@ public sealed class OneShotAnswerExecutor : Executor<RankedResults>
         {
             const string fallback = "I could not find relevant information to answer your question.";
             Console.WriteLine($"  → {fallback}");
-            await context.YieldOutputAsync(fallback, cancellationToken);
+            await context.YieldOutputAsync(new AnswerResult(fallback, 0, 0, 0), cancellationToken);
             return;
         }
 
@@ -54,7 +54,7 @@ public sealed class OneShotAnswerExecutor : Executor<RankedResults>
             - Do NOT speculate or add information beyond what the documents provide.
             """;
 
-        var answer = await _ai.CompleteAsync(
+        var result = await _ai.CompleteAsync(
             SystemPrompt,
             $"Question: {message.SubQuestion}\n\nDocuments:\n{docs}\n\nAnswer:",
             useReasoningModel: true,
@@ -63,9 +63,12 @@ public sealed class OneShotAnswerExecutor : Executor<RankedResults>
         Console.WriteLine("\n" + new string('═', 80));
         Console.WriteLine("FINAL ANSWER (One-Shot)");
         Console.WriteLine(new string('═', 80));
-        Console.WriteLine(answer);
+        Console.WriteLine(result.Text);
         Console.WriteLine(new string('═', 80));
+        Console.WriteLine($"  Tokens — input: {result.InputTokens}, output: {result.OutputTokens}, total: {result.TotalTokens}");
 
-        await context.YieldOutputAsync(answer, cancellationToken);
+        await context.YieldOutputAsync(
+            new AnswerResult(result.Text, result.InputTokens, result.OutputTokens, result.TotalTokens),
+            cancellationToken);
     }
 }
