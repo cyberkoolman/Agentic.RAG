@@ -17,6 +17,8 @@ prompt before sending it:
 IMPORTANT: Respond with valid JSON only. No markdown fences, no explanations — just the JSON object.
 ```
 
+**Source:** [`AzureAIService.cs` lines 55–98](AgenticRAG/Services/AzureAIService.cs#L55-L98)
+
 The deep-thinking workflow uses the reasoning model for Planner, Policy, and
 Synthesis. It uses the fast model for Query Rewriter, Retrieval Supervisor,
 Reranker, Distiller, and Reflection.
@@ -27,9 +29,10 @@ Reranker, Distiller, and Reflection.
 
 ### 1. Planner
 
-**Executor:** `PlannerExecutor`  
-**Model tier:** Reasoning  
-**Structured output:** Yes
+- **Executor:** `PlannerExecutor`
+- **Model tier:** Reasoning
+- **Structured output:** Yes
+- **Source:** [`PlannerExecutor.cs` lines 43–74](AgenticRAG/Executors/PlannerExecutor.cs#L43-L74)
 
 #### System prompt
 
@@ -89,9 +92,10 @@ using the original query. The Planner then sends `StepSignal(0)`.
 
 ### 2. Query Rewriter
 
-**Executor:** `QueryRewriterExecutor`  
-**Model tier:** Fast  
-**Structured output:** No
+- **Executor:** `QueryRewriterExecutor`
+- **Model tier:** Fast
+- **Structured output:** No
+- **Source:** [`QueryRewriterExecutor.cs` lines 64–103](AgenticRAG/Executors/QueryRewriterExecutor.cs#L64-L103)
 
 The first `search_docs` step does not invoke the LLM when research history is
 empty. It passes the original user query through unchanged. Later document
@@ -146,9 +150,10 @@ single or double quotation marks.
 
 ### 3A. Retrieval Supervisor
 
-**Executor:** `VectorSearchExecutor`  
-**Model tier:** Fast  
-**Structured output:** No
+- **Executor:** `VectorSearchExecutor`
+- **Model tier:** Fast
+- **Structured output:** No
+- **Source:** [`VectorSearchExecutor.cs` lines 70–100](AgenticRAG/Executors/VectorSearchExecutor.cs#L70-L100)
 
 This prompt runs only when the Planner selected `search_docs`. It chooses the
 retrieval algorithm before the internal knowledge base is searched.
@@ -192,8 +197,9 @@ defaults to `hybrid`.
 
 ### 3B. Web Search
 
-**Executor:** `WebSearchExecutor`  
-**LLM prompt:** None
+- **Executor:** `WebSearchExecutor`
+- **LLM prompt:** None
+- **Source:** [`WebSearchExecutor.cs`](AgenticRAG/Executors/WebSearchExecutor.cs)
 
 When the Planner selects `search_web`, the rewritten query is sent to Tavily.
 The returned web results are converted into `RagDocument` records and passed to
@@ -203,9 +209,10 @@ the same Reranker used by document search.
 
 ### 4. Reranker
 
-**Executor:** `RerankerExecutor`  
-**Model tier:** Fast  
-**Structured output:** Yes
+- **Executor:** `RerankerExecutor`
+- **Model tier:** Fast
+- **Structured output:** Yes
+- **Source:** [`RerankerExecutor.cs` lines 44–82](AgenticRAG/Executors/RerankerExecutor.cs#L44-L82)
 
 Each candidate is numbered and represented by its source, section, and up to
 400 characters of content.
@@ -253,9 +260,10 @@ top-K candidates in their original order.
 
 ### 5. Distiller
 
-**Executor:** `DistillerExecutor`  
-**Model tier:** Fast  
-**Structured output:** No
+- **Executor:** `DistillerExecutor`
+- **Model tier:** Fast
+- **Structured output:** No
+- **Source:** [`DistillerExecutor.cs` lines 32–72](AgenticRAG/Executors/DistillerExecutor.cs#L32-L72)
 
 The Distiller receives the complete content and provenance metadata for each
 reranked document.
@@ -314,9 +322,10 @@ No relevant information found.
 
 ### 6. Reflection
 
-**Executor:** `ReflectionExecutor`  
-**Model tier:** Fast  
-**Structured output:** No
+- **Executor:** `ReflectionExecutor`
+- **Model tier:** Fast
+- **Structured output:** No
+- **Source:** [`ReflectionExecutor.cs` lines 35–69](AgenticRAG/Executors/ReflectionExecutor.cs#L35-L69)
 
 #### System prompt
 
@@ -352,9 +361,10 @@ It also stores the complete distilled context in
 
 ### 7. Policy
 
-**Executor:** `PolicyExecutor`  
-**Model tier:** Reasoning  
-**Structured output:** Yes
+- **Executor:** `PolicyExecutor`
+- **Model tier:** Reasoning
+- **Structured output:** Yes
+- **Source:** [`PolicyExecutor.cs` lines 42–107](AgenticRAG/Executors/PolicyExecutor.cs#L42-L107)
 
 The Policy prompt runs only when another planned step remains and the iteration
 limit has not been reached. Otherwise, the executor finishes without an LLM
@@ -409,9 +419,10 @@ Rewriter; `FINISH` sends a `FinishSignal` to Synthesis.
 
 ### 8. Synthesis
 
-**Executor:** `SynthesisExecutor`  
-**Model tier:** Reasoning  
-**Structured output:** No
+- **Executor:** `SynthesisExecutor`
+- **Model tier:** Reasoning
+- **Structured output:** No
+- **Source:** [`SynthesisExecutor.cs` lines 39–74](AgenticRAG/Executors/SynthesisExecutor.cs#L39-L74)
 
 #### System prompt
 
@@ -460,11 +471,14 @@ The one-shot pipeline reuses the Retrieval Supervisor and Reranker prompts
 documented above. It has no Planner, Query Rewriter, Distiller, Reflection,
 Policy, or multi-step Synthesis prompt.
 
+**Workflow source:** [`OneShotRagWorkflow.cs`](AgenticRAG/Workflow/OneShotRagWorkflow.cs)
+
 ### One-Shot Answer
 
-**Executor:** `OneShotAnswerExecutor`  
-**Model tier:** Reasoning  
-**Structured output:** No
+- **Executor:** `OneShotAnswerExecutor`
+- **Model tier:** Reasoning
+- **Structured output:** No
+- **Source:** [`OneShotAnswerExecutor.cs` lines 28–61](AgenticRAG/Executors/OneShotAnswerExecutor.cs#L28-L61)
 
 #### System prompt
 
@@ -514,11 +528,11 @@ I could not find relevant information to answer your question.
 
 ## Prompt-Free Components
 
-| Component | Behavior |
-|---|---|
-| Gateway | Loads sources, checks knowledge-base state, and forwards user queries without an LLM prompt. |
-| Query Bridge | Passes the original query directly to document search in the one-shot pipeline. |
-| Embedding generation | Sends text to the configured embedding model; it does not use a chat prompt. |
-| Vector, keyword, and hybrid search | Execute retrieval after the Retrieval Supervisor chooses a strategy. |
-| Web Search | Sends the rewritten query to Tavily without a chat prompt. |
-| Workflow routing | Routes typed messages and applies conditional edges without an LLM prompt. |
+| Component | Behavior | Source |
+|---|---|---|
+| Gateway | Loads sources, checks knowledge-base state, and forwards user queries without an LLM prompt. | [`GatewayExecutor.cs`](AgenticRAG/Executors/GatewayExecutor.cs) |
+| Query Bridge | Passes the original query directly to document search in the one-shot pipeline. | [`OneShotRagWorkflow.cs` lines 77–103](AgenticRAG/Workflow/OneShotRagWorkflow.cs#L77-L103) |
+| Embedding generation | Sends text to the configured embedding model; it does not use a chat prompt. | [`AzureAIService.cs`](AgenticRAG/Services/AzureAIService.cs) |
+| Vector, keyword, and hybrid search | Execute retrieval after the Retrieval Supervisor chooses a strategy. | [`VectorSearchExecutor.cs` lines 37–64](AgenticRAG/Executors/VectorSearchExecutor.cs#L37-L64) |
+| Web Search | Sends the rewritten query to Tavily without a chat prompt. | [`WebSearchExecutor.cs`](AgenticRAG/Executors/WebSearchExecutor.cs) |
+| Workflow routing | Routes typed messages and applies conditional edges without an LLM prompt. | [`AgenticRagWorkflow.cs` lines 66–108](AgenticRAG/Workflow/AgenticRagWorkflow.cs#L66-L108) |
